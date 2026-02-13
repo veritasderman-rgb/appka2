@@ -1,0 +1,138 @@
+import { useBattleStore } from '../store/battleStore';
+import { allianceUnits, sampleEnemyUnits } from '../data/alliance_units';
+import { UnitPicker } from './UnitPicker';
+import { ArmyPanel } from './ArmyPanel';
+import { BattleConfigPanel } from './BattleConfig';
+import { useState } from 'react';
+
+export function ArmyBuilder() {
+  const {
+    armyA, armyB,
+    addToArmyA, addToArmyB,
+    removeFromArmyA, removeFromArmyB,
+    updateUnitCount,
+    clearArmyA, clearArmyB,
+    config, setConfig,
+    runBattle, isSimulating, simulationProgress,
+  } = useBattleStore();
+
+  const [activeSide, setActiveSide] = useState<'alliance' | 'enemy'>('alliance');
+
+  const canSimulate = armyA.length > 0 && armyB.length > 0 && !isSimulating;
+
+  return (
+    <div className="flex flex-col h-full gap-4">
+      {/* Config */}
+      <BattleConfigPanel config={config} onChange={setConfig} />
+
+      {/* Side selector (mobile) */}
+      <div className="flex md:hidden gap-2">
+        <button
+          onClick={() => setActiveSide('alliance')}
+          className={`flex-1 py-2 rounded text-sm font-bold border ${
+            activeSide === 'alliance'
+              ? 'bg-alliance/20 border-alliance text-alliance-light'
+              : 'bg-dark-card border-dark-border text-parchment-dark'
+          }`}
+        >
+          Spojenci ({armyA.length})
+        </button>
+        <button
+          onClick={() => setActiveSide('enemy')}
+          className={`flex-1 py-2 rounded text-sm font-bold border ${
+            activeSide === 'enemy'
+              ? 'bg-enemy/20 border-enemy text-enemy-light'
+              : 'bg-dark-card border-dark-border text-parchment-dark'
+          }`}
+        >
+          Nepřátelé ({armyB.length})
+        </button>
+      </div>
+
+      {/* Main 4-column layout */}
+      <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 min-h-0">
+        {/* Alliance picker */}
+        <div className={`bg-dark-card border border-dark-border rounded-lg p-3 overflow-hidden flex flex-col ${
+          activeSide !== 'alliance' ? 'hidden md:flex' : 'flex'
+        }`}>
+          <UnitPicker
+            units={allianceUnits}
+            onAdd={addToArmyA}
+            selectedIds={armyA.map(u => u.id)}
+            title="Dostupní Spojenci"
+            side="alliance"
+          />
+        </div>
+
+        {/* Alliance army */}
+        <div className={`overflow-hidden flex flex-col ${
+          activeSide !== 'alliance' ? 'hidden md:flex' : 'flex'
+        }`}>
+          <ArmyPanel
+            units={armyA}
+            onRemove={removeFromArmyA}
+            onCountChange={(id, c) => updateUnitCount('alliance', id, c)}
+            onClear={clearArmyA}
+            title="Armáda Spojenců"
+            side="alliance"
+          />
+        </div>
+
+        {/* Enemy army */}
+        <div className={`overflow-hidden flex flex-col ${
+          activeSide !== 'enemy' ? 'hidden md:flex' : 'flex'
+        }`}>
+          <ArmyPanel
+            units={armyB}
+            onRemove={removeFromArmyB}
+            onCountChange={(id, c) => updateUnitCount('enemy', id, c)}
+            onClear={clearArmyB}
+            title="Armáda Nepřátel"
+            side="enemy"
+          />
+        </div>
+
+        {/* Enemy picker */}
+        <div className={`bg-dark-card border border-dark-border rounded-lg p-3 overflow-hidden flex flex-col ${
+          activeSide !== 'enemy' ? 'hidden md:flex' : 'flex'
+        }`}>
+          <UnitPicker
+            units={sampleEnemyUnits}
+            onAdd={addToArmyB}
+            selectedIds={armyB.map(u => u.id)}
+            title="Dostupní Nepřátelé"
+            side="enemy"
+          />
+        </div>
+      </div>
+
+      {/* Run button */}
+      <div className="flex justify-center py-2">
+        <button
+          onClick={runBattle}
+          disabled={!canSimulate}
+          className={`px-8 py-3 rounded-lg font-bold text-lg transition-all ${
+            canSimulate
+              ? 'bg-gold text-dark-bg hover:bg-gold-light shadow-lg shadow-gold/20'
+              : 'bg-dark-surface text-parchment-dark border border-dark-border cursor-not-allowed'
+          }`}
+        >
+          {isSimulating ? (
+            <span className="flex items-center gap-2">
+              Simuluji... {simulationProgress}%
+              <span className="inline-block w-4 h-4 border-2 border-dark-bg border-t-transparent rounded-full animate-spin" />
+            </span>
+          ) : (
+            'Spustit simulaci'
+          )}
+        </button>
+      </div>
+
+      {!canSimulate && !isSimulating && (armyA.length === 0 || armyB.length === 0) && (
+        <p className="text-center text-parchment-dark text-sm -mt-2">
+          Vyber alespoň jednu jednotku na každé straně
+        </p>
+      )}
+    </div>
+  );
+}

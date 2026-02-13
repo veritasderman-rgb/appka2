@@ -1,0 +1,78 @@
+import type { Unit } from '../engine/types';
+import { UnitCard } from './UnitCard';
+import { avgDamage } from '../engine/dice';
+
+interface ArmyPanelProps {
+  units: Unit[];
+  onRemove: (id: string) => void;
+  onCountChange: (id: string, count: number) => void;
+  onClear: () => void;
+  title: string;
+  side: 'alliance' | 'enemy';
+}
+
+export function ArmyPanel({ units, onRemove, onCountChange, onClear, title, side }: ArmyPanelProps) {
+  const totalSoldiers = units.reduce((s, u) => s + u.count, 0);
+  const avgZU = units.length > 0
+    ? (units.reduce((s, u) => s + u.zu * u.count, 0) / totalSoldiers).toFixed(1)
+    : '0';
+
+  const totalDmgPerBK = units.reduce((s, u) => {
+    const dmg = avgDamage(u.dmg) * Math.min(u.count, 100);
+    return s + dmg;
+  }, 0);
+
+  const sideColor = side === 'alliance' ? 'alliance' : 'enemy';
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className={`text-lg font-bold text-${sideColor}-light`}>{title}</h2>
+        {units.length > 0 && (
+          <button
+            onClick={onClear}
+            className="text-xs text-blood-light hover:text-red-400 border border-blood/30 rounded px-2 py-1"
+          >
+            Vyčistit
+          </button>
+        )}
+      </div>
+
+      {/* Summary */}
+      {units.length > 0 && (
+        <div className="grid grid-cols-3 gap-2 mb-3 text-center text-sm">
+          <div className="bg-dark-surface rounded p-2 border border-dark-border">
+            <div className="text-xs text-parchment-dark">Vojáků</div>
+            <div className="text-gold font-bold">{totalSoldiers.toLocaleString()}</div>
+          </div>
+          <div className="bg-dark-surface rounded p-2 border border-dark-border">
+            <div className="text-xs text-parchment-dark">Prům. ZU</div>
+            <div className="text-gold font-bold">{avgZU}</div>
+          </div>
+          <div className="bg-dark-surface rounded p-2 border border-dark-border">
+            <div className="text-xs text-parchment-dark">DMG/BK</div>
+            <div className="text-gold font-bold">{Math.round(totalDmgPerBK)}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Units */}
+      <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+        {units.length === 0 ? (
+          <div className="text-center text-parchment-dark text-sm py-12 border border-dashed border-dark-border rounded-lg">
+            Přidej jednotky z panelu vlevo
+          </div>
+        ) : (
+          units.map(unit => (
+            <UnitCard
+              key={unit.id}
+              unit={unit}
+              onRemove={() => onRemove(unit.id)}
+              onCountChange={c => onCountChange(unit.id, c)}
+            />
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
