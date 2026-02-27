@@ -9,9 +9,11 @@ export interface CombatUnit {
   morale_failures: number;
   total_losses: number;
   fatigue_state: 'fresh' | 'tired' | 'exhausted' | 'collapsed';
+  /** true if this unit belongs to the defending army (gets terrain bonuses) */
+  isBattleDefender: boolean;
 }
 
-export function createCombatUnit(unit: Unit): CombatUnit {
+export function createCombatUnit(unit: Unit, isBattleDefender: boolean = false): CombatUnit {
   return {
     unit: { ...unit },
     count: unit.count,
@@ -19,6 +21,7 @@ export function createCombatUnit(unit: Unit): CombatUnit {
     morale_failures: 0,
     total_losses: 0,
     fatigue_state: 'fresh',
+    isBattleDefender,
   };
 }
 
@@ -149,8 +152,10 @@ function resolveAttack(
   if (effectiveCount <= 0) return { logs, kills: 0 };
 
   const fatiguePenalty = getFatiguePenalty(atk.fatigue_state);
-  const terrainTHAC0 = getTerrainTHAC0Penalty(config.terrain);
-  const terrainAC = getTerrainACBonus(config.terrain, true);
+  // Terrain THAC0 penalty applies to units of the attacking army
+  const terrainTHAC0 = !atk.isBattleDefender ? getTerrainTHAC0Penalty(config.terrain) : 0;
+  // Terrain AC bonus applies to units of the defending army
+  const terrainAC = getTerrainACBonus(config.terrain, def.isBattleDefender);
 
   // Effective THAC0 (higher = worse for attacker)
   const effectiveThac0 = atk.unit.thac0 + fatiguePenalty + terrainTHAC0;

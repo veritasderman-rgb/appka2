@@ -64,8 +64,10 @@ function simulateSingleBattle(
   unitsB: Unit[],
   config: BattleConfig
 ): SingleBattleResult {
-  const armyA = unitsA.map(createCombatUnit);
-  const armyB = unitsB.map(createCombatUnit);
+  const aIsDefender = config.attackerSide !== 'army_a';
+  const bIsDefender = config.attackerSide !== 'army_b';
+  const armyA = unitsA.map(u => createCombatUnit(u, aIsDefender));
+  const armyB = unitsB.map(u => createCombatUnit(u, bIsDefender));
   const allLogs: BattleLogEntry[] = [];
   let bk = 0;
 
