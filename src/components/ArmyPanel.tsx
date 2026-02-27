@@ -1,11 +1,11 @@
-import type { Unit } from '../engine/types';
+import type { ArmyUnit } from '../store/battleStore';
 import { UnitCard } from './UnitCard';
 import { avgDamage } from '../engine/dice';
 
 interface ArmyPanelProps {
-  units: Unit[];
-  onRemove: (id: string) => void;
-  onCountChange: (id: string, count: number) => void;
+  units: ArmyUnit[];
+  onRemove: (instanceId: string) => void;
+  onCountChange: (instanceId: string, count: number) => void;
   onClear: () => void;
   title: string;
   side: 'alliance' | 'enemy';
@@ -65,10 +65,10 @@ export function ArmyPanel({ units, onRemove, onCountChange, onClear, title, side
         ) : (
           units.map(unit => (
             <UnitCard
-              key={unit.id}
+              key={unit.instanceId}
               unit={unit}
-              onRemove={() => onRemove(unit.id)}
-              onCountChange={c => onCountChange(unit.id, c)}
+              onRemove={() => onRemove(unit.instanceId)}
+              onCountChange={c => onCountChange(unit.instanceId, c)}
             />
           ))
         )}

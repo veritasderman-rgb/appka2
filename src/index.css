@@ -42,3 +42,21 @@ body {
   background: var(--color-dark-border);
   border-radius: 4px;
 }
+
+.input-field {
+  width: 100%;
+  background-color: var(--color-dark-surface);
+  border: 1px solid var(--color-dark-border);
+  border-radius: 0.375rem;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.875rem;
+  color: var(--color-parchment);
+}
+.input-field:focus {
+  outline: none;
+  border-color: var(--color-gold);
+}
+.input-field::placeholder {
+  color: var(--color-parchment-dark);
+  opacity: 0.6;
+}

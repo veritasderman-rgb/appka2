@@ -1,8 +1,9 @@
 import type { Unit } from '../engine/types';
 import { UNIT_TYPE_LABELS } from '../engine/types';
+import type { ArmyUnit } from '../store/battleStore';
 
 interface UnitCardProps {
-  unit: Unit;
+  unit: Unit | ArmyUnit;
   onClick?: () => void;
   onRemove?: () => void;
   onCountChange?: (count: number) => void;
@@ -110,14 +111,13 @@ export function UnitCard({ unit, onClick, onRemove, onCountChange, compact, sele
               type="number"
               value={unit.count}
               min={0}
-              max={unit.max_count}
               onChange={e => onCountChange(parseInt(e.target.value) || 0)}
               className="bg-dark-surface border border-dark-border rounded px-2 py-1 w-24 text-sm text-parchment"
             />
           ) : (
             <span className="text-sm font-bold text-parchment">{unit.count}</span>
           )}
-          <span className="text-xs text-parchment-dark">/ {unit.max_count}</span>
+          <span className="text-xs text-parchment-dark">(výchozí: {unit.max_count})</span>
         </div>
 
         {unit.notes && (
