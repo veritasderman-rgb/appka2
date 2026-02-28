@@ -103,6 +103,13 @@ export interface UnitResult {
   avg_dead: number;
   best_remaining: number;
   worst_remaining: number;
+  times_destroyed: number;
+  destruction_rate: number;
+  avg_morale_failures: number;
+  avg_morale_checks: number;
+  morale_failure_rate: number;
+  avg_critical_hits: number;
+  avg_critical_misses: number;
 }
 
 export interface ArmyLosses {
@@ -130,6 +137,9 @@ export interface SimulationResult {
   };
   bk_distribution: number[];
   key_factors: string[];
+  min_duration_bk: number;
+  max_duration_bk: number;
+  stddev_duration_bk: number;
 }
 
 export interface BattleLogEntry {

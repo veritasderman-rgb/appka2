@@ -113,7 +113,10 @@ export function SimulationResults({ result, onBack }: SimulationResultsProps) {
             <div className="border-t border-dark-border pt-2" />
             <StatRow label="Ztráty Spojenců" value={`${result.avg_losses.army_a.total_soldiers} (${result.avg_losses.army_a.percent}%)`} color="text-alliance-light" />
             <StatRow label="Ztráty Nepřátel" value={`${result.avg_losses.army_b.total_soldiers} (${result.avg_losses.army_b.percent}%)`} color="text-enemy-light" />
+            <div className="border-t border-dark-border pt-2" />
             <StatRow label="Prům. trvání" value={`${result.avg_duration_bk} BK`} color="text-parchment" />
+            <StatRow label="Min / Max BK" value={`${result.min_duration_bk} / ${result.max_duration_bk} BK`} color="text-parchment-dark" />
+            <StatRow label="Std. odchylka BK" value={`±${result.stddev_duration_bk} BK`} color="text-parchment-dark" />
           </div>
         </div>
       </div>
@@ -176,6 +179,63 @@ export function SimulationResults({ result, onBack }: SimulationResultsProps) {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Detailed unit stats: destruction, morale, crits */}
+      <div className="bg-dark-card border border-dark-border rounded-lg p-4">
+        <h3 className="text-gold font-bold mb-3">Detailní statistiky jednotek</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-parchment-dark border-b border-dark-border">
+                <th className="text-left py-2 px-2">Jednotka</th>
+                <th className="text-right py-2 px-2" title="Kolikrát byla jednotka zcela zničena z celkového počtu simulací">Zničena</th>
+                <th className="text-right py-2 px-2" title="Procento simulací, kde jednotka skončila s nulou vojáků">Šance zničení</th>
+                <th className="text-right py-2 px-2" title="Průměrný počet hodů na morálku za bitvu">Hody morálky</th>
+                <th className="text-right py-2 px-2" title="Průměrný počet neúspěšných hodů na morálku">Selhání morálky</th>
+                <th className="text-right py-2 px-2" title="Procento neúspěšných hodů z celkových hodů na morálku">Úsp. morálky</th>
+                <th className="text-right py-2 px-2" title="Průměrný počet kritických zásahů za bitvu">Krit. zásahy</th>
+                <th className="text-right py-2 px-2" title="Průměrný počet kritických minutí za bitvu">Krit. minutí</th>
+              </tr>
+            </thead>
+            <tbody>
+              {result.avg_losses.army_a.by_unit.map(u => (
+                <tr key={u.name} className="border-b border-dark-border/50 hover:bg-dark-hover">
+                  <td className="py-1.5 px-2 text-alliance-light">{u.name}</td>
+                  <td className="text-right py-1.5 px-2">{u.times_destroyed}×</td>
+                  <td className={`text-right py-1.5 px-2 font-bold ${u.destruction_rate >= 75 ? 'text-blood-light' : u.destruction_rate >= 40 ? 'text-gold' : 'text-parchment-dark'}`}>
+                    {u.destruction_rate}%
+                  </td>
+                  <td className="text-right py-1.5 px-2 text-parchment-dark">{u.avg_morale_checks}</td>
+                  <td className="text-right py-1.5 px-2 text-blood-light">{u.avg_morale_failures}</td>
+                  <td className={`text-right py-1.5 px-2 font-bold ${u.morale_failure_rate >= 50 ? 'text-blood-light' : u.morale_failure_rate >= 25 ? 'text-gold' : 'text-parchment'}`}>
+                    {u.avg_morale_checks > 0 ? `${100 - u.morale_failure_rate}%` : '—'}
+                  </td>
+                  <td className="text-right py-1.5 px-2 text-parchment">{u.avg_critical_hits}</td>
+                  <td className="text-right py-1.5 px-2 text-parchment-dark">{u.avg_critical_misses}</td>
+                </tr>
+              ))}
+              <tr><td colSpan={8} className="py-1 border-b-2 border-dark-border" /></tr>
+              {result.avg_losses.army_b.by_unit.map(u => (
+                <tr key={u.name} className="border-b border-dark-border/50 hover:bg-dark-hover">
+                  <td className="py-1.5 px-2 text-enemy-light">{u.name}</td>
+                  <td className="text-right py-1.5 px-2">{u.times_destroyed}×</td>
+                  <td className={`text-right py-1.5 px-2 font-bold ${u.destruction_rate >= 75 ? 'text-blood-light' : u.destruction_rate >= 40 ? 'text-gold' : 'text-parchment-dark'}`}>
+                    {u.destruction_rate}%
+                  </td>
+                  <td className="text-right py-1.5 px-2 text-parchment-dark">{u.avg_morale_checks}</td>
+                  <td className="text-right py-1.5 px-2 text-blood-light">{u.avg_morale_failures}</td>
+                  <td className={`text-right py-1.5 px-2 font-bold ${u.morale_failure_rate >= 50 ? 'text-blood-light' : u.morale_failure_rate >= 25 ? 'text-gold' : 'text-parchment'}`}>
+                    {u.avg_morale_checks > 0 ? `${100 - u.morale_failure_rate}%` : '—'}
+                  </td>
+                  <td className="text-right py-1.5 px-2 text-parchment">{u.avg_critical_hits}</td>
+                  <td className="text-right py-1.5 px-2 text-parchment-dark">{u.avg_critical_misses}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-xs text-parchment-dark mt-2 opacity-60">Průměry přes {result.total_simulations} simulací. Úsp. morálky = % hodů, kdy jednotka prošla. Šance zničení = % simulací s nulou vojáků.</p>
       </div>
 
       {/* Losses bar chart */}

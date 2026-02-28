@@ -7,8 +7,11 @@ export interface CombatUnit {
   count: number;
   fatigue_remaining: number;
   morale_failures: number;
+  morale_checks: number;
   total_losses: number;
   fatigue_state: 'fresh' | 'tired' | 'exhausted' | 'collapsed';
+  critical_hits: number;
+  critical_misses: number;
   /** true if this unit belongs to the defending army (gets terrain bonuses) */
   isBattleDefender: boolean;
 }
@@ -19,8 +22,11 @@ export function createCombatUnit(unit: Unit, isBattleDefender: boolean = false):
     count: unit.count,
     fatigue_remaining: unit.fatigue,
     morale_failures: 0,
+    morale_checks: 0,
     total_losses: 0,
     fatigue_state: 'fresh',
+    critical_hits: 0,
+    critical_misses: 0,
     isBattleDefender,
   };
 }
@@ -197,10 +203,12 @@ function resolveAttack(
     // Critical miss
     critical = 'miss';
     hit = false;
+    atk.critical_misses++;
   } else if (roll === 20) {
     // Critical hit
     critical = 'hit';
     hit = true;
+    atk.critical_hits++;
     const critMult = rollDie(4);
     const baseDmg = rollDamage(atk.unit.dmg);
     const multiplier = critMult === 1 ? 8 : critMult;
@@ -250,6 +258,7 @@ function checkMorale(unit: CombatUnit, bk: number, logs: BattleLogEntry[]) {
   const roll = d20();
   const passed = roll <= effectiveMorale;
 
+  unit.morale_checks++;
   if (!passed) {
     unit.morale_failures++;
   }
