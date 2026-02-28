@@ -9,9 +9,11 @@ export interface CombatUnit {
   morale_failures: number;
   total_losses: number;
   fatigue_state: 'fresh' | 'tired' | 'exhausted' | 'collapsed';
+  /** true if this unit belongs to the defending army (gets terrain bonuses) */
+  isBattleDefender: boolean;
 }
 
-export function createCombatUnit(unit: Unit): CombatUnit {
+export function createCombatUnit(unit: Unit, isBattleDefender: boolean = false): CombatUnit {
   return {
     unit: { ...unit },
     count: unit.count,
@@ -19,6 +21,7 @@ export function createCombatUnit(unit: Unit): CombatUnit {
     morale_failures: 0,
     total_losses: 0,
     fatigue_state: 'fresh',
+    isBattleDefender,
   };
 }
 
@@ -71,11 +74,25 @@ export interface ClashResult {
  * Simulate one BK (battle round = 10 combat rounds) between two units.
  * Each side attacks once (or twice based on initiative).
  */
+/** External modifiers from spells (buffs/CC) applied during a BK */
+export interface SpellModifiers {
+  /** AC modifier for this unit (negative = better defense) */
+  acMod: number;
+  /** THAC0 modifier for this unit (negative = better attack) */
+  thac0Mod: number;
+  /** Fraction of unit disabled by enemy CC (0-1) */
+  disabledFraction: number;
+}
+
+const NO_MODS: SpellModifiers = { acMod: 0, thac0Mod: 0, disabledFraction: 0 };
+
 export function simulateBK(
   attacker: CombatUnit,
   defender: CombatUnit,
   bk: number,
-  config: BattleConfig
+  config: BattleConfig,
+  attackerMods: SpellModifiers = NO_MODS,
+  defenderMods: SpellModifiers = NO_MODS,
 ): ClashResult {
   const logs: BattleLogEntry[] = [];
   let attackerLosses = 0;
@@ -91,9 +108,11 @@ export function simulateBK(
 
   const first = iniA >= iniB ? attacker : defender;
   const second = iniA >= iniB ? defender : attacker;
+  const firstMods = iniA >= iniB ? attackerMods : defenderMods;
+  const secondMods = iniA >= iniB ? defenderMods : attackerMods;
 
   // First side attacks
-  const result1 = resolveAttack(first, second, bk, config, true);
+  const result1 = resolveAttack(first, second, bk, config, true, firstMods, secondMods);
   logs.push(...result1.logs);
 
   // Apply losses to second before they attack back
@@ -107,7 +126,7 @@ export function simulateBK(
 
   // Second side attacks (if still alive)
   if (second.count > 0) {
-    const result2 = resolveAttack(second, first, bk, config, false);
+    const result2 = resolveAttack(second, first, bk, config, false, secondMods, firstMods);
     logs.push(...result2.logs);
 
     first.count -= result2.kills;
@@ -140,22 +159,30 @@ function resolveAttack(
   def: CombatUnit,
   bk: number,
   config: BattleConfig,
-  isFirstAttack: boolean
+  isFirstAttack: boolean,
+  atkMods: SpellModifiers = NO_MODS,
+  defMods: SpellModifiers = NO_MODS,
 ): AttackResult {
   const logs: BattleLogEntry[] = [];
   if (atk.count <= 0 || def.count <= 0) return { logs, kills: 0 };
 
-  const effectiveCount = getEffectiveCount(atk, isFirstAttack ? bk : bk, config.largeBattle);
+  let effectiveCount = getEffectiveCount(atk, isFirstAttack ? bk : bk, config.largeBattle);
+  // Reduce effective count by CC disable fraction
+  if (atkMods.disabledFraction > 0) {
+    effectiveCount = Math.max(1, Math.floor(effectiveCount * (1 - atkMods.disabledFraction)));
+  }
   if (effectiveCount <= 0) return { logs, kills: 0 };
 
   const fatiguePenalty = getFatiguePenalty(atk.fatigue_state);
-  const terrainTHAC0 = getTerrainTHAC0Penalty(config.terrain);
-  const terrainAC = getTerrainACBonus(config.terrain, true);
+  // Terrain THAC0 penalty applies to units of the attacking army
+  const terrainTHAC0 = !atk.isBattleDefender ? getTerrainTHAC0Penalty(config.terrain) : 0;
+  // Terrain AC bonus applies to units of the defending army
+  const terrainAC = getTerrainACBonus(config.terrain, def.isBattleDefender);
 
-  // Effective THAC0 (higher = worse for attacker)
-  const effectiveThac0 = atk.unit.thac0 + fatiguePenalty + terrainTHAC0;
-  // Effective AC (lower = better for defender)
-  const effectiveAC = def.unit.ac - terrainAC;
+  // Effective THAC0 (higher = worse for attacker) + spell buff to attacker's THAC0
+  const effectiveThac0 = atk.unit.thac0 + fatiguePenalty + terrainTHAC0 + atkMods.thac0Mod;
+  // Effective AC (lower = better for defender) + spell buff to defender's AC
+  const effectiveAC = def.unit.ac - terrainAC + defMods.acMod;
 
   // Need to roll: THAC0 - AC
   const needed = effectiveThac0 - effectiveAC;

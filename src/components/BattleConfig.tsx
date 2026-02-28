@@ -1,4 +1,4 @@
-import type { BattleConfig as BattleConfigType, Terrain, TimeOfDay } from '../engine/types';
+import type { AttackerSide, BattleConfig as BattleConfigType, Terrain, TimeOfDay } from '../engine/types';
 import { TERRAIN_MODIFIERS } from '../engine/types';
 
 interface BattleConfigProps {
@@ -11,7 +11,20 @@ export function BattleConfigPanel({ config, onChange }: BattleConfigProps) {
     <div className="bg-dark-card border border-dark-border rounded-lg p-4">
       <h3 className="text-gold font-bold mb-3">Nastavení simulace</h3>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        {/* Attacker side */}
+        <div>
+          <label className="text-xs text-parchment-dark block mb-1">Útočník</label>
+          <select
+            value={config.attackerSide}
+            onChange={e => onChange({ attackerSide: e.target.value as AttackerSide })}
+            className="bg-dark-surface border border-dark-border rounded px-2 py-1.5 text-sm text-parchment w-full"
+          >
+            <option value="army_a">Spojenci útočí</option>
+            <option value="army_b">Nepřátelé útočí</option>
+          </select>
+        </div>
+
         {/* Iterations */}
         <div>
           <label className="text-xs text-parchment-dark block mb-1">Iterací</label>

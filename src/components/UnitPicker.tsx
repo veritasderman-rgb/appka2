@@ -7,12 +7,11 @@ import { UnitCard } from './UnitCard';
 interface UnitPickerProps {
   units: Unit[];
   onAdd: (unit: Unit) => void;
-  selectedIds: string[];
   title: string;
   side: 'alliance' | 'enemy';
 }
 
-export function UnitPicker({ units, onAdd, selectedIds, title, side }: UnitPickerProps) {
+export function UnitPicker({ units, onAdd, title, side }: UnitPickerProps) {
   const [search, setSearch] = useState('');
   const [originFilter, setOriginFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
@@ -22,13 +21,12 @@ export function UnitPicker({ units, onAdd, selectedIds, title, side }: UnitPicke
 
   const filtered = useMemo(() => {
     return units.filter(u => {
-      if (selectedIds.includes(u.id)) return false;
       if (originFilter !== 'all' && u.origin !== originFilter) return false;
       if (typeFilter !== 'all' && u.type !== typeFilter) return false;
       if (search && !u.name.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [units, selectedIds, originFilter, typeFilter, search]);
+  }, [units, originFilter, typeFilter, search]);
 
   const sideColor = side === 'alliance' ? 'alliance' : 'enemy';
 
@@ -87,7 +85,7 @@ export function UnitPicker({ units, onAdd, selectedIds, title, side }: UnitPicke
       </div>
 
       <div className="text-xs text-parchment-dark mt-2 text-center">
-        {filtered.length} jednotek · klikni pro přidání
+        {filtered.length} jednotek · klikni pro přidání (lze přidat vícekrát)
       </div>
     </div>
   );

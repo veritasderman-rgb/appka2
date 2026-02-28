@@ -10,8 +10,9 @@ export function ArmyBuilder() {
     armyA, armyB,
     addToArmyA, addToArmyB,
     removeFromArmyA, removeFromArmyB,
-    updateUnitCount,
+    updateUnitCount, toggleSpell,
     clearArmyA, clearArmyB,
+    customAllianceUnits, customEnemyUnits,
     config, setConfig,
     runBattle, isSimulating, simulationProgress,
   } = useBattleStore();
@@ -56,9 +57,8 @@ export function ArmyBuilder() {
           activeSide !== 'alliance' ? 'hidden md:flex' : 'flex'
         }`}>
           <UnitPicker
-            units={allianceUnits}
+            units={[...allianceUnits, ...customAllianceUnits]}
             onAdd={addToArmyA}
-            selectedIds={armyA.map(u => u.id)}
             title="Dostupní Spojenci"
             side="alliance"
           />
@@ -71,7 +71,8 @@ export function ArmyBuilder() {
           <ArmyPanel
             units={armyA}
             onRemove={removeFromArmyA}
-            onCountChange={(id, c) => updateUnitCount('alliance', id, c)}
+            onCountChange={(instanceId, c) => updateUnitCount('alliance', instanceId, c)}
+            onSpellToggle={(instanceId, spellId) => toggleSpell('alliance', instanceId, spellId)}
             onClear={clearArmyA}
             title="Armáda Spojenců"
             side="alliance"
@@ -85,7 +86,8 @@ export function ArmyBuilder() {
           <ArmyPanel
             units={armyB}
             onRemove={removeFromArmyB}
-            onCountChange={(id, c) => updateUnitCount('enemy', id, c)}
+            onCountChange={(instanceId, c) => updateUnitCount('enemy', instanceId, c)}
+            onSpellToggle={(instanceId, spellId) => toggleSpell('enemy', instanceId, spellId)}
             onClear={clearArmyB}
             title="Armáda Nepřátel"
             side="enemy"
@@ -97,9 +99,8 @@ export function ArmyBuilder() {
           activeSide !== 'enemy' ? 'hidden md:flex' : 'flex'
         }`}>
           <UnitPicker
-            units={sampleEnemyUnits}
+            units={[...sampleEnemyUnits, ...customEnemyUnits]}
             onAdd={addToArmyB}
-            selectedIds={armyB.map(u => u.id)}
             title="Dostupní Nepřátelé"
             side="enemy"
           />

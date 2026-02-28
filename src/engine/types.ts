@@ -78,8 +78,13 @@ export interface Unit {
   notes?: string;
 }
 
+/** Unit types that can cast spells */
+export const MAGICAL_UNIT_TYPES: UnitType[] = ['MG', 'BM', 'KN', 'DR'];
+
 export type Terrain = 'open' | 'forest' | 'hills' | 'walls' | 'ford';
 export type TimeOfDay = 'day' | 'night';
+
+export type AttackerSide = 'army_a' | 'army_b';
 
 export interface BattleConfig {
   iterations: number;
@@ -88,6 +93,7 @@ export interface BattleConfig {
   timeOfDay: TimeOfDay;
   largeBattle: boolean;
   commanderBonuses: boolean;
+  attackerSide: AttackerSide;
 }
 
 export interface UnitResult {
@@ -147,6 +153,7 @@ export const DEFAULT_CONFIG: BattleConfig = {
   timeOfDay: 'day',
   largeBattle: false,
   commanderBonuses: true,
+  attackerSide: 'army_a',
 };
 
 export const TERRAIN_MODIFIERS: Record<Terrain, { ac_bonus: number; thac0_penalty: number; description: string }> = {

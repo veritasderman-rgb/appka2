@@ -2,6 +2,7 @@ import './index.css';
 import { useBattleStore } from './store/battleStore';
 import { ArmyBuilder } from './components/ArmyBuilder';
 import { SimulationResults } from './components/SimulationResults';
+import { UnitEditor } from './components/UnitEditor';
 
 function App() {
   const { screen, setScreen, result } = useBattleStore();
@@ -29,6 +30,16 @@ function App() {
               Sestavení
             </button>
             <button
+              onClick={() => setScreen('units')}
+              className={`px-3 py-1.5 rounded text-sm border transition-all ${
+                screen === 'units'
+                  ? 'bg-gold/10 border-gold text-gold'
+                  : 'border-dark-border text-parchment-dark hover:text-parchment'
+              }`}
+            >
+              Jednotky
+            </button>
+            <button
               onClick={() => result && setScreen('results')}
               disabled={!result}
               className={`px-3 py-1.5 rounded text-sm border transition-all ${
@@ -48,6 +59,7 @@ function App() {
       {/* Main content */}
       <main className="flex-1 p-4 max-w-screen-2xl mx-auto w-full">
         {screen === 'builder' && <ArmyBuilder />}
+        {screen === 'units' && <UnitEditor />}
         {screen === 'results' && result && (
           <SimulationResults
             result={result}

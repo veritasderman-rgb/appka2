@@ -1,6 +1,17 @@
 import { createCombatUnit, isDefeated, simulateBK } from './combat';
-import type { CombatUnit } from './combat';
+import type { CombatUnit, SpellModifiers } from './combat';
 import type { BattleConfig, BattleLogEntry, SimulationResult, Unit, UnitResult } from './types';
+import {
+  type SpellCombatState,
+  type ActiveBuff,
+  type ActiveCC,
+  initSpellState,
+  castSpellInBK,
+  getBuffModifiers,
+  getCCDisableFraction,
+  tickBuffs,
+  tickCCs,
+} from './spellCombat';
 
 interface SingleBattleResult {
   winner: 'army_a' | 'army_b' | 'draw';
@@ -10,25 +21,34 @@ interface SingleBattleResult {
   logs: BattleLogEntry[];
 }
 
-/** Create matchups between armies based on movement priority */
-function createMatchups(armyA: CombatUnit[], armyB: CombatUnit[]): [CombatUnit, CombatUnit][] {
-  const pairs: [CombatUnit, CombatUnit][] = [];
+/** Spell-aware wrapper for a combat unit */
+interface CombatUnitWithSpells {
+  combat: CombatUnit;
+  spellState?: SpellCombatState;
+  buffs: ActiveBuff[];
+  ccs: ActiveCC[];
+}
 
-  // Sort by movement priority (lower = faster, picks target first)
-  const sortedA = [...armyA].sort((a, b) => a.unit.movement_priority - b.unit.movement_priority);
-  const sortedB = [...armyB].sort((a, b) => a.unit.movement_priority - b.unit.movement_priority);
+/** Create matchups between armies based on movement priority */
+function createMatchups(
+  armyA: CombatUnitWithSpells[],
+  armyB: CombatUnitWithSpells[]
+): [CombatUnitWithSpells, CombatUnitWithSpells][] {
+  const pairs: [CombatUnitWithSpells, CombatUnitWithSpells][] = [];
+
+  const sortedA = [...armyA].sort((a, b) => a.combat.unit.movement_priority - b.combat.unit.movement_priority);
+  const sortedB = [...armyB].sort((a, b) => a.combat.unit.movement_priority - b.combat.unit.movement_priority);
 
   const usedB = new Set<number>();
 
   for (const unitA of sortedA) {
-    // Find best available opponent (closest movement priority)
     let bestIdx = -1;
     let bestPriority = Infinity;
 
     for (let i = 0; i < sortedB.length; i++) {
       if (usedB.has(i)) continue;
-      if (sortedB[i].count <= 0) continue;
-      const diff = Math.abs(unitA.unit.movement_priority - sortedB[i].unit.movement_priority);
+      if (sortedB[i].combat.count <= 0) continue;
+      const diff = Math.abs(unitA.combat.unit.movement_priority - sortedB[i].combat.unit.movement_priority);
       if (diff < bestPriority) {
         bestPriority = diff;
         bestIdx = i;
@@ -41,12 +61,11 @@ function createMatchups(armyA: CombatUnit[], armyB: CombatUnit[]): [CombatUnit, 
     }
   }
 
-  // Remaining B units with no match fight the strongest A unit
   for (let i = 0; i < sortedB.length; i++) {
-    if (!usedB.has(i) && sortedB[i].count > 0) {
+    if (!usedB.has(i) && sortedB[i].combat.count > 0) {
       const strongestA = sortedA.reduce((best, u) =>
-        u.count > best.count ? u : best, sortedA[0]);
-      if (strongestA.count > 0) {
+        u.combat.count > best.combat.count ? u : best, sortedA[0]);
+      if (strongestA.combat.count > 0) {
         pairs.push([strongestA, sortedB[i]]);
       }
     }
@@ -55,8 +74,16 @@ function createMatchups(armyA: CombatUnit[], armyB: CombatUnit[]): [CombatUnit, 
   return pairs;
 }
 
-function isArmyDefeated(army: CombatUnit[]): boolean {
-  return army.every(u => isDefeated(u));
+function isArmyDefeated(army: CombatUnitWithSpells[]): boolean {
+  return army.every(u => isDefeated(u.combat));
+}
+
+/** Extract enabled spell IDs from a unit (uses ArmyUnit.spells if available) */
+function getEnabledSpellIds(unit: Unit): string[] {
+  // The unit may have a 'spells' field from ArmyUnit
+  const armyUnit = unit as Unit & { spells?: Array<{ spellId: string; enabled: boolean }> };
+  if (!armyUnit.spells) return [];
+  return armyUnit.spells.filter(s => s.enabled).map(s => s.spellId);
 }
 
 function simulateSingleBattle(
@@ -64,27 +91,123 @@ function simulateSingleBattle(
   unitsB: Unit[],
   config: BattleConfig
 ): SingleBattleResult {
-  const armyA = unitsA.map(createCombatUnit);
-  const armyB = unitsB.map(createCombatUnit);
+  const aIsDefender = config.attackerSide !== 'army_a';
+  const bIsDefender = config.attackerSide !== 'army_b';
+
+  const armyA: CombatUnitWithSpells[] = unitsA.map(u => {
+    const combat = createCombatUnit(u, aIsDefender);
+    const enabledIds = getEnabledSpellIds(u);
+    return {
+      combat,
+      spellState: enabledIds.length > 0 ? initSpellState(combat, enabledIds) : undefined,
+      buffs: [],
+      ccs: [],
+    };
+  });
+  const armyB: CombatUnitWithSpells[] = unitsB.map(u => {
+    const combat = createCombatUnit(u, bIsDefender);
+    const enabledIds = getEnabledSpellIds(u);
+    return {
+      combat,
+      spellState: enabledIds.length > 0 ? initSpellState(combat, enabledIds) : undefined,
+      buffs: [],
+      ccs: [],
+    };
+  });
+
   const allLogs: BattleLogEntry[] = [];
   let bk = 0;
 
   while (!isArmyDefeated(armyA) && !isArmyDefeated(armyB) && bk < config.maxBK) {
     bk++;
 
+    // === SPELL PHASE ===
+    // Each magical unit casts one spell targeting a random alive enemy unit
+    const aliveA = armyA.filter(u => !isDefeated(u.combat));
+    const aliveB = armyB.filter(u => !isDefeated(u.combat));
+
+    // Army A casters cast
+    for (const unitA of aliveA) {
+      if (!unitA.spellState || aliveB.length === 0) continue;
+      // Pick a random enemy target
+      const target = aliveB[Math.floor(Math.random() * aliveB.length)];
+      const result = castSpellInBK(unitA.combat, unitA.spellState, target.combat, bk);
+      if (!result) continue;
+
+      allLogs.push(result.log);
+
+      // Apply spell effects
+      if (result.kills > 0) {
+        const actualKills = Math.min(result.kills, target.combat.count);
+        target.combat.count -= actualKills;
+        target.combat.total_losses += actualKills;
+      }
+      if (result.soldiersRestored > 0) {
+        unitA.combat.count += result.soldiersRestored;
+        unitA.combat.total_losses -= result.soldiersRestored;
+      }
+      if (result.buff) {
+        unitA.buffs.push(result.buff);
+      }
+      if (result.cc) {
+        target.ccs.push(result.cc);
+      }
+    }
+
+    // Army B casters cast
+    for (const unitB of aliveB) {
+      if (!unitB.spellState || aliveA.length === 0) continue;
+      const target = aliveA[Math.floor(Math.random() * aliveA.length)];
+      const result = castSpellInBK(unitB.combat, unitB.spellState, target.combat, bk);
+      if (!result) continue;
+
+      allLogs.push(result.log);
+
+      if (result.kills > 0) {
+        const actualKills = Math.min(result.kills, target.combat.count);
+        target.combat.count -= actualKills;
+        target.combat.total_losses += actualKills;
+      }
+      if (result.soldiersRestored > 0) {
+        unitB.combat.count += result.soldiersRestored;
+        unitB.combat.total_losses -= result.soldiersRestored;
+      }
+      if (result.buff) {
+        unitB.buffs.push(result.buff);
+      }
+      if (result.cc) {
+        target.ccs.push(result.cc);
+      }
+    }
+
+    // === MELEE PHASE ===
     const matchups = createMatchups(
-      armyA.filter(u => !isDefeated(u)),
-      armyB.filter(u => !isDefeated(u))
+      armyA.filter(u => !isDefeated(u.combat)),
+      armyB.filter(u => !isDefeated(u.combat))
     );
 
-    for (const [unitA, unitB] of matchups) {
-      if (isDefeated(unitA) || isDefeated(unitB)) continue;
-      const result = simulateBK(unitA, unitB, bk, config);
+    for (const [wA, wB] of matchups) {
+      if (isDefeated(wA.combat) || isDefeated(wB.combat)) continue;
+
+      // Compute spell modifiers for this matchup
+      const aMods: SpellModifiers = {
+        ...getBuffModifiers(wA.buffs),
+        disabledFraction: getCCDisableFraction(wA.ccs),
+      };
+      const bMods: SpellModifiers = {
+        ...getBuffModifiers(wB.buffs),
+        disabledFraction: getCCDisableFraction(wB.ccs),
+      };
+
+      const result = simulateBK(wA.combat, wB.combat, bk, config, aMods, bMods);
       allLogs.push(...result.logs);
     }
 
-    // Reassign units that defeated their opponent
-    // (handled by next iteration's matchup creation)
+    // === TICK BUFFS/CCS ===
+    for (const u of [...armyA, ...armyB]) {
+      u.buffs = tickBuffs(u.buffs);
+      u.ccs = tickCCs(u.ccs);
+    }
   }
 
   const aDefeated = isArmyDefeated(armyA);
@@ -94,15 +217,15 @@ function simulateSingleBattle(
   if (aDefeated && bDefeated) winner = 'draw';
   else if (bDefeated) winner = 'army_a';
   else if (aDefeated) winner = 'army_b';
-  else winner = 'draw'; // timeout
+  else winner = 'draw';
 
   const army_a_remaining = new Map<string, number>();
   for (const u of armyA) {
-    army_a_remaining.set(u.unit.id, Math.max(0, u.count));
+    army_a_remaining.set(u.combat.unit.id, Math.max(0, u.combat.count));
   }
   const army_b_remaining = new Map<string, number>();
   for (const u of armyB) {
-    army_b_remaining.set(u.unit.id, Math.max(0, u.count));
+    army_b_remaining.set(u.combat.unit.id, Math.max(0, u.combat.count));
   }
 
   return { winner, bk_count: bk, army_a_remaining, army_b_remaining, logs: allLogs };
@@ -129,7 +252,6 @@ export function runSimulation(
   let totalBK = 0;
   const bkDist: number[] = new Array(config.maxBK + 1).fill(0);
 
-  // Track remaining counts per unit
   const aRemaining: Map<string, number[]> = new Map();
   const bRemaining: Map<string, number[]> = new Map();
 
@@ -180,7 +302,6 @@ export function runSimulation(
   const aTotalLosses = aUnitResults.reduce((s, r) => s + r.avg_dead, 0);
   const bTotalLosses = bUnitResults.reduce((s, r) => s + r.avg_dead, 0);
 
-  // Key factors analysis
   const keyFactors: string[] = [];
   if (wins.army_a > wins.army_b * 2) {
     keyFactors.push('Spojenci mají výraznou převahu v simulacích.');
@@ -189,7 +310,6 @@ export function runSimulation(
     keyFactors.push('Nepřátelé mají výraznou převahu v simulacích.');
   }
 
-  // Find most impactful units
   const sortedByImpact = [...aUnitResults, ...bUnitResults]
     .sort((a, b) => (b.original - b.avg_remaining) - (a.original - a.avg_remaining));
   if (sortedByImpact.length > 0) {

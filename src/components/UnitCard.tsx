@@ -1,16 +1,19 @@
 import type { Unit } from '../engine/types';
 import { UNIT_TYPE_LABELS } from '../engine/types';
+import type { ArmyUnit } from '../store/battleStore';
+import { SpellSelector } from './SpellSelector';
 
 interface UnitCardProps {
-  unit: Unit;
+  unit: Unit | ArmyUnit;
   onClick?: () => void;
   onRemove?: () => void;
   onCountChange?: (count: number) => void;
+  onSpellToggle?: (spellId: string) => void;
   compact?: boolean;
   selected?: boolean;
 }
 
-export function UnitCard({ unit, onClick, onRemove, onCountChange, compact, selected }: UnitCardProps) {
+export function UnitCard({ unit, onClick, onRemove, onCountChange, onSpellToggle, compact, selected }: UnitCardProps) {
   if (compact) {
     return (
       <div
@@ -110,18 +113,22 @@ export function UnitCard({ unit, onClick, onRemove, onCountChange, compact, sele
               type="number"
               value={unit.count}
               min={0}
-              max={unit.max_count}
               onChange={e => onCountChange(parseInt(e.target.value) || 0)}
               className="bg-dark-surface border border-dark-border rounded px-2 py-1 w-24 text-sm text-parchment"
             />
           ) : (
             <span className="text-sm font-bold text-parchment">{unit.count}</span>
           )}
-          <span className="text-xs text-parchment-dark">/ {unit.max_count}</span>
+          <span className="text-xs text-parchment-dark">(výchozí: {unit.max_count})</span>
         </div>
 
         {unit.notes && (
           <div className="text-xs text-parchment-dark mt-2 italic">{unit.notes}</div>
+        )}
+
+        {/* Spell selector for magical army units */}
+        {onSpellToggle && 'spells' in unit && unit.spells && unit.spells.length > 0 && (
+          <SpellSelector spells={unit.spells} onToggle={onSpellToggle} />
         )}
       </div>
     </div>
