@@ -118,6 +118,25 @@ export interface ArmyLosses {
   by_unit: UnitResult[];
 }
 
+export interface BKUnitState {
+  name: string;
+  side: 'army_a' | 'army_b';
+  count_before: number;
+  count_after: number;
+}
+
+export interface BKSnapshot {
+  bk: number;
+  events: BattleLogEntry[];
+  unit_states: BKUnitState[];
+}
+
+export interface DetailedBattleLog {
+  winner: 'army_a' | 'army_b' | 'draw';
+  bk_count: number;
+  snapshots: BKSnapshot[];
+}
+
 export interface SimulationResult {
   total_simulations: number;
   wins: {
@@ -140,6 +159,7 @@ export interface SimulationResult {
   min_duration_bk: number;
   max_duration_bk: number;
   stddev_duration_bk: number;
+  detailed_log?: DetailedBattleLog;
 }
 
 export interface BattleLogEntry {
