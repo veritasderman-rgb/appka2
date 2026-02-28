@@ -78,6 +78,9 @@ export interface Unit {
   notes?: string;
 }
 
+/** Unit types that can cast spells */
+export const MAGICAL_UNIT_TYPES: UnitType[] = ['MG', 'BM', 'KN', 'DR'];
+
 export type Terrain = 'open' | 'forest' | 'hills' | 'walls' | 'ford';
 export type TimeOfDay = 'day' | 'night';
 

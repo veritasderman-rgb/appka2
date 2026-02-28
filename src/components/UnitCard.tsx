@@ -1,17 +1,19 @@
 import type { Unit } from '../engine/types';
 import { UNIT_TYPE_LABELS } from '../engine/types';
 import type { ArmyUnit } from '../store/battleStore';
+import { SpellSelector } from './SpellSelector';
 
 interface UnitCardProps {
   unit: Unit | ArmyUnit;
   onClick?: () => void;
   onRemove?: () => void;
   onCountChange?: (count: number) => void;
+  onSpellToggle?: (spellId: string) => void;
   compact?: boolean;
   selected?: boolean;
 }
 
-export function UnitCard({ unit, onClick, onRemove, onCountChange, compact, selected }: UnitCardProps) {
+export function UnitCard({ unit, onClick, onRemove, onCountChange, onSpellToggle, compact, selected }: UnitCardProps) {
   if (compact) {
     return (
       <div
@@ -122,6 +124,11 @@ export function UnitCard({ unit, onClick, onRemove, onCountChange, compact, sele
 
         {unit.notes && (
           <div className="text-xs text-parchment-dark mt-2 italic">{unit.notes}</div>
+        )}
+
+        {/* Spell selector for magical army units */}
+        {onSpellToggle && 'spells' in unit && unit.spells && unit.spells.length > 0 && (
+          <SpellSelector spells={unit.spells} onToggle={onSpellToggle} />
         )}
       </div>
     </div>

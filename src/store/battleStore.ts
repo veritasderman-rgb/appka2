@@ -1,13 +1,24 @@
 import { create } from 'zustand';
 import type { BattleConfig, SimulationResult, Unit } from '../engine/types';
-import { DEFAULT_CONFIG } from '../engine/types';
+import { DEFAULT_CONFIG, MAGICAL_UNIT_TYPES } from '../engine/types';
 import { runSimulation } from '../engine/simulation';
+import { getCasterClassForUnitType, getAvailableSpells, snapCasterLevel } from '../data/spells';
 
 type Screen = 'builder' | 'results' | 'units';
+
+/** Spell state for a magical unit in an army */
+export interface UnitSpellState {
+  spellId: string;
+  enabled: boolean;
+}
 
 /** Each army entry gets a unique instanceId so the same unit can be added multiple times. */
 export interface ArmyUnit extends Unit {
   instanceId: string;
+  /** Spell configuration (only for magical units) */
+  spells?: UnitSpellState[];
+  /** Resolved caster level for spell slots */
+  casterLevel?: number;
 }
 
 let instanceCounter = 0;
@@ -26,6 +37,7 @@ interface BattleState {
   removeFromArmyA: (instanceId: string) => void;
   removeFromArmyB: (instanceId: string) => void;
   updateUnitCount: (faction: 'alliance' | 'enemy', instanceId: string, count: number) => void;
+  toggleSpell: (faction: 'alliance' | 'enemy', instanceId: string, spellId: string) => void;
   clearArmyA: () => void;
   clearArmyB: () => void;
 
@@ -60,6 +72,20 @@ function saveCustomUnits(faction: 'alliance' | 'enemy', units: Unit[]) {
   localStorage.setItem(`custom_${faction}_units`, JSON.stringify(units));
 }
 
+/** Build spell state for a unit if it's a magical type */
+function buildSpellState(unit: Unit): { spells?: UnitSpellState[]; casterLevel?: number } {
+  if (!MAGICAL_UNIT_TYPES.includes(unit.type)) return {};
+  const cc = getCasterClassForUnitType(unit.type);
+  if (!cc) return {};
+  const level = unit.commander?.level ?? 6;
+  const casterLevel = snapCasterLevel(level);
+  const available = getAvailableSpells(cc, casterLevel);
+  return {
+    casterLevel,
+    spells: available.map(s => ({ spellId: s.id, enabled: true })),
+  };
+}
+
 export const useBattleStore = create<BattleState>((set, get) => ({
   screen: 'builder',
   setScreen: (s) => set({ screen: s }),
@@ -69,11 +95,13 @@ export const useBattleStore = create<BattleState>((set, get) => ({
 
   addToArmyA: (unit) => {
     const { armyA } = get();
-    set({ armyA: [...armyA, { ...unit, instanceId: nextInstanceId(unit.id) }] });
+    const spellState = buildSpellState(unit);
+    set({ armyA: [...armyA, { ...unit, instanceId: nextInstanceId(unit.id), ...spellState }] });
   },
   addToArmyB: (unit) => {
     const { armyB } = get();
-    set({ armyB: [...armyB, { ...unit, instanceId: nextInstanceId(unit.id) }] });
+    const spellState = buildSpellState(unit);
+    set({ armyB: [...armyB, { ...unit, instanceId: nextInstanceId(unit.id), ...spellState }] });
   },
   removeFromArmyA: (instanceId) => set(s => ({ armyA: s.armyA.filter(u => u.instanceId !== instanceId) })),
   removeFromArmyB: (instanceId) => set(s => ({ armyB: s.armyB.filter(u => u.instanceId !== instanceId) })),
@@ -89,6 +117,17 @@ export const useBattleStore = create<BattleState>((set, get) => ({
         armyB: s.armyB.map(u => u.instanceId === instanceId ? { ...u, count: clampedCount } : u),
       }));
     }
+  },
+
+  toggleSpell: (faction, instanceId, spellId) => {
+    const key = faction === 'alliance' ? 'armyA' : 'armyB';
+    set(s => ({
+      [key]: (s[key] as ArmyUnit[]).map(u =>
+        u.instanceId === instanceId && u.spells
+          ? { ...u, spells: u.spells.map(sp => sp.spellId === spellId ? { ...sp, enabled: !sp.enabled } : sp) }
+          : u
+      ),
+    }));
   },
 
   // Custom units
