@@ -18,7 +18,7 @@ export interface CombatUnit {
 
 export function createCombatUnit(unit: Unit, isBattleDefender: boolean = false): CombatUnit {
   return {
-    unit: { ...unit },
+    unit: { ...unit, max_count: Math.max(unit.count, unit.max_count) },
     count: unit.count,
     fatigue_remaining: unit.fatigue,
     morale_failures: 0,
