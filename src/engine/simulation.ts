@@ -1,6 +1,6 @@
 import { createCombatUnit, isDefeated, simulateBK } from './combat';
 import type { CombatUnit, SpellModifiers } from './combat';
-import type { BattleConfig, BattleLogEntry, SimulationResult, Unit, UnitResult } from './types';
+import type { BattleConfig, BattleLogEntry, BKSnapshot, SimulationResult, Unit, UnitResult } from './types';
 import {
   type SpellCombatState,
   type ActiveBuff,
@@ -28,6 +28,7 @@ interface SingleBattleResult {
   army_a_stats: Map<string, UnitStats>;
   army_b_stats: Map<string, UnitStats>;
   logs: BattleLogEntry[];
+  snapshots: BKSnapshot[];
 }
 
 /** Spell-aware wrapper for a combat unit */
@@ -125,10 +126,17 @@ function simulateSingleBattle(
   });
 
   const allLogs: BattleLogEntry[] = [];
+  const snapshots: BKSnapshot[] = [];
   let bk = 0;
 
   while (!isArmyDefeated(armyA) && !isArmyDefeated(armyB) && bk < config.maxBK) {
     bk++;
+
+    // Capture unit counts before this BK
+    const countsBefore = new Map<string, number>();
+    for (const u of armyA) countsBefore.set(u.combat.unit.id, u.combat.count);
+    for (const u of armyB) countsBefore.set(u.combat.unit.id, u.combat.count);
+    const bkLogsStart = allLogs.length;
 
     // === SPELL PHASE ===
     // Each magical unit casts one spell targeting a random alive enemy unit
@@ -217,6 +225,23 @@ function simulateSingleBattle(
       u.buffs = tickBuffs(u.buffs);
       u.ccs = tickCCs(u.ccs);
     }
+
+    // Capture snapshot for this BK
+    const unitStates = [
+      ...armyA.map(u => ({
+        name: u.combat.unit.name,
+        side: 'army_a' as const,
+        count_before: countsBefore.get(u.combat.unit.id) ?? u.combat.count,
+        count_after: Math.max(0, u.combat.count),
+      })),
+      ...armyB.map(u => ({
+        name: u.combat.unit.name,
+        side: 'army_b' as const,
+        count_before: countsBefore.get(u.combat.unit.id) ?? u.combat.count,
+        count_after: Math.max(0, u.combat.count),
+      })),
+    ];
+    snapshots.push({ bk, events: allLogs.slice(bkLogsStart), unit_states: unitStates });
   }
 
   const aDefeated = isArmyDefeated(armyA);
@@ -251,7 +276,7 @@ function simulateSingleBattle(
     });
   }
 
-  return { winner, bk_count: bk, army_a_remaining, army_b_remaining, army_a_stats, army_b_stats, logs: allLogs };
+  return { winner, bk_count: bk, army_a_remaining, army_b_remaining, army_a_stats, army_b_stats, logs: allLogs, snapshots };
 }
 
 export function runSimulation(
@@ -380,7 +405,7 @@ export function runSimulation(
     keyFactors.push('Bitvy jsou zdlouhavé a vyčerpávající (15+ BK).');
   }
 
-  return {
+  const simulationResult: SimulationResult = {
     total_simulations: n,
     wins,
     probability: {
@@ -407,4 +432,14 @@ export function runSimulation(
     max_duration_bk: maxBK,
     stddev_duration_bk: stddevBK,
   };
+
+  if (n === 1 && results.length === 1) {
+    simulationResult.detailed_log = {
+      winner: results[0].winner,
+      bk_count: results[0].bk_count,
+      snapshots: results[0].snapshots,
+    };
+  }
+
+  return simulationResult;
 }

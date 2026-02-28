@@ -33,6 +33,7 @@ export function BattleConfigPanel({ config, onChange }: BattleConfigProps) {
             onChange={e => onChange({ iterations: parseInt(e.target.value) })}
             className="bg-dark-surface border border-dark-border rounded px-2 py-1.5 text-sm text-parchment w-full"
           >
+            <option value={1}>1 (kolo po kole)</option>
             <option value={50}>50</option>
             <option value={100}>100</option>
             <option value={200}>200</option>

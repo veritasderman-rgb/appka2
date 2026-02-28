@@ -1,5 +1,6 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import type { SimulationResult } from '../engine/types';
+import { BattleLog } from './BattleLog';
 
 interface SimulationResultsProps {
   result: SimulationResult;
@@ -255,6 +256,11 @@ export function SimulationResults({ result, onBack }: SimulationResultsProps) {
             </BarChart>
           </ResponsiveContainer>
         </div>
+      )}
+
+      {/* Detailed battle log (only when iterations = 1) */}
+      {result.detailed_log && (
+        <BattleLog log={result.detailed_log} />
       )}
 
       {/* Key factors */}
