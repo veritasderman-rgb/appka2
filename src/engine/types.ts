@@ -110,6 +110,9 @@ export interface UnitResult {
   morale_failure_rate: number;
   avg_critical_hits: number;
   avg_critical_misses: number;
+  /** Estimated soldiers that could recover after battle (avg_dead * survival_percent) */
+  estimated_recovery: number;
+  survival_percent: number;
 }
 
 export interface ArmyLosses {

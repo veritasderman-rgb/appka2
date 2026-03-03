@@ -142,9 +142,8 @@ export function simulateRangedAttack(
     }
   }
 
-  const kills = hit && def.unit.hp_per_soldier > 0
-    ? Math.min(Math.floor(damage / def.unit.hp_per_soldier), def.count)
-    : 0;
+  const hps = def.unit.hp_per_soldier > 0 ? def.unit.hp_per_soldier : 1;
+  const kills = hit ? Math.min(Math.floor(damage / hps), def.count) : 0;
 
   return {
     log: { bk, attacker: atk.unit.name, defender: def.unit.name, roll, needed, hit, damage, kills, critical, ranged: true },
@@ -306,7 +305,8 @@ function resolveAttack(
     totalDamage = Math.max(1, totalDamage - fatiguePenalty * effectiveCount);
   }
 
-  const kills = hit ? Math.floor(totalDamage / def.unit.hp_per_soldier) : 0;
+  const defHps = def.unit.hp_per_soldier > 0 ? def.unit.hp_per_soldier : 1;
+  const kills = hit ? Math.floor(totalDamage / defHps) : 0;
 
   logs.push({
     bk,

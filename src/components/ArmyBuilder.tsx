@@ -76,6 +76,7 @@ export function ArmyBuilder() {
             onClear={clearArmyA}
             title="Armáda Spojenců"
             side="alliance"
+            isAttacker={config.attackerSide === 'army_a'}
           />
         </div>
 
@@ -91,6 +92,7 @@ export function ArmyBuilder() {
             onClear={clearArmyB}
             title="Armáda Nepřátel"
             side="enemy"
+            isAttacker={config.attackerSide === 'army_b'}
           />
         </div>
 

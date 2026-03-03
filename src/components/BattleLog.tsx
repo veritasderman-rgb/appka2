@@ -185,6 +185,13 @@ function BKRound({ snapshot }: { snapshot: BKSnapshot }) {
 
 export function BattleLog({ log }: BattleLogProps) {
   const [showAll, setShowAll] = useState(false);
+  if (!log.snapshots || log.snapshots.length === 0) {
+    return (
+      <div className="bg-dark-card border border-dark-border rounded-lg p-4 text-parchment-dark text-sm">
+        Žádná kola nebyla odehrána — armáda mohla být prázdná nebo bitva okamžitě skončila.
+      </div>
+    );
+  }
   const visibleSnapshots = showAll ? log.snapshots : log.snapshots.slice(0, 10);
 
   const winnerLabel = log.winner === 'army_a' ? 'Spojenci' : log.winner === 'army_b' ? 'Nepřátelé' : 'Remíza';

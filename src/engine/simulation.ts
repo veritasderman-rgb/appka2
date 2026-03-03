@@ -411,6 +411,8 @@ export function runSimulation(
         morale_failure_rate: total_checks > 0 ? Math.round((total_failures / total_checks) * 100) : 0,
         avg_critical_hits: Math.round(avg_critical_hits * 10) / 10,
         avg_critical_misses: Math.round(avg_critical_misses * 10) / 10,
+        survival_percent: u.survival_percent ?? 0,
+        estimated_recovery: Math.round((u.count - Math.round(avg)) * ((u.survival_percent ?? 0) / 100)),
       };
     });
   }
