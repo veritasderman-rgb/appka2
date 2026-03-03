@@ -240,9 +240,13 @@ function simulateSingleBattle(
     }
 
     // === MELEE PHASE ===
+    // In BK 1-2, ranged units are busy in the ranged phase — exclude them from melee
+    const meleeFilter = (u: CombatUnitWithSpells) =>
+      !isDefeated(u.combat) && (bk > 2 || !isRangedUnit(u.combat));
+
     const matchups = createMatchups(
-      armyA.filter(u => !isDefeated(u.combat)),
-      armyB.filter(u => !isDefeated(u.combat))
+      armyA.filter(meleeFilter),
+      armyB.filter(meleeFilter)
     );
 
     for (const [wA, wB] of matchups) {
