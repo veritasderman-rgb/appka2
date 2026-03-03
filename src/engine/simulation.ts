@@ -1,4 +1,4 @@
-import { createCombatUnit, isDefeated, simulateBK } from './combat';
+import { createCombatUnit, isDefeated, isRangedUnit, simulateBK, simulateRangedAttack } from './combat';
 import type { CombatUnit, SpellModifiers } from './combat';
 import type { BattleConfig, BattleLogEntry, BKSnapshot, SimulationResult, Unit, UnitResult } from './types';
 import {
@@ -88,6 +88,7 @@ function isArmyDefeated(army: CombatUnitWithSpells[]): boolean {
   return army.every(u => isDefeated(u.combat));
 }
 
+
 /** Extract enabled spell IDs from a unit (uses ArmyUnit.spells if available) */
 function getEnabledSpellIds(unit: Unit): string[] {
   // The unit may have a 'spells' field from ArmyUnit
@@ -105,7 +106,7 @@ function simulateSingleBattle(
   const bIsDefender = config.attackerSide !== 'army_b';
 
   const armyA: CombatUnitWithSpells[] = unitsA.map(u => {
-    const combat = createCombatUnit(u, aIsDefender);
+    const combat = createCombatUnit(u, aIsDefender, config.commanderBonuses);
     const enabledIds = getEnabledSpellIds(u);
     return {
       combat,
@@ -115,7 +116,7 @@ function simulateSingleBattle(
     };
   });
   const armyB: CombatUnitWithSpells[] = unitsB.map(u => {
-    const combat = createCombatUnit(u, bIsDefender);
+    const combat = createCombatUnit(u, bIsDefender, config.commanderBonuses);
     const enabledIds = getEnabledSpellIds(u);
     return {
       combat,
@@ -194,6 +195,47 @@ function simulateSingleBattle(
       }
       if (result.cc) {
         target.ccs.push(result.cc);
+      }
+    }
+
+    // === RANGED PHASE (BK 1 and 2 only) ===
+    // Ranged units with ammo fire before melee engagement
+    if (bk <= 2) {
+      const rangedA = armyA.filter(u => !isDefeated(u.combat) && isRangedUnit(u.combat));
+      const rangedB = armyB.filter(u => !isDefeated(u.combat) && isRangedUnit(u.combat));
+      const aliveMeleeB = armyB.filter(u => !isDefeated(u.combat));
+      const aliveMeleeA = armyA.filter(u => !isDefeated(u.combat));
+
+      for (const shooter of rangedA) {
+        if (aliveMeleeB.length === 0) break;
+        const target = aliveMeleeB[Math.floor(Math.random() * aliveMeleeB.length)];
+        const attacksPerBK = shooter.combat.unit.attacks_per_bk ?? 1;
+        for (let shot = 0; shot < attacksPerBK; shot++) {
+          if (target.combat.count <= 0) break;
+          const result = simulateRangedAttack(shooter.combat, target.combat, bk, config);
+          allLogs.push(result.log);
+          target.combat.count -= result.kills;
+          target.combat.total_losses += result.kills;
+        }
+        if (shooter.combat.ammo_remaining !== undefined) {
+          shooter.combat.ammo_remaining = Math.max(0, shooter.combat.ammo_remaining - 1);
+        }
+      }
+
+      for (const shooter of rangedB) {
+        if (aliveMeleeA.length === 0) break;
+        const target = aliveMeleeA[Math.floor(Math.random() * aliveMeleeA.length)];
+        const attacksPerBK = shooter.combat.unit.attacks_per_bk ?? 1;
+        for (let shot = 0; shot < attacksPerBK; shot++) {
+          if (target.combat.count <= 0) break;
+          const result = simulateRangedAttack(shooter.combat, target.combat, bk, config);
+          allLogs.push(result.log);
+          target.combat.count -= result.kills;
+          target.combat.total_losses += result.kills;
+        }
+        if (shooter.combat.ammo_remaining !== undefined) {
+          shooter.combat.ammo_remaining = Math.max(0, shooter.combat.ammo_remaining - 1);
+        }
       }
     }
 

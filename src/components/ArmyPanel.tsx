@@ -14,12 +14,12 @@ interface ArmyPanelProps {
 
 export function ArmyPanel({ units, onRemove, onCountChange, onSpellToggle, onClear, title, side }: ArmyPanelProps) {
   const totalSoldiers = units.reduce((s, u) => s + u.count, 0);
-  const avgZU = units.length > 0
+  const avgZU = totalSoldiers > 0
     ? (units.reduce((s, u) => s + u.zu * u.count, 0) / totalSoldiers).toFixed(1)
     : '0';
 
   const totalDmgPerBK = units.reduce((s, u) => {
-    const dmg = avgDamage(u.dmg) * Math.min(u.count, 100);
+    const dmg = avgDamage(u.dmg) * u.count;
     return s + dmg;
   }, 0);
 

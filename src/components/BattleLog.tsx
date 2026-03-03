@@ -22,6 +22,8 @@ function BKRound({ snapshot }: { snapshot: BKSnapshot }) {
     .filter(u => u.side === 'army_b')
     .reduce((s, u) => s + Math.max(0, u.count_before - u.count_after), 0);
 
+  const rangedEvents = snapshot.events.filter(e => !e.morale_check && e.ranged);
+  const meleeEvents = snapshot.events.filter(e => !e.morale_check && !e.ranged);
   const attackEvents = snapshot.events.filter(e => !e.morale_check);
   const moraleEvents = snapshot.events.filter(e => !!e.morale_check);
 
@@ -35,7 +37,9 @@ function BKRound({ snapshot }: { snapshot: BKSnapshot }) {
         <div className="flex items-center gap-3">
           <span className="text-gold font-bold text-sm">BK {snapshot.bk}</span>
           <span className="text-xs text-parchment-dark">
-            {attackEvents.length} útok{attackEvents.length !== 1 ? 'ů' : ''}
+            {rangedEvents.length > 0 && `🏹 ${rangedEvents.length} · `}
+            {meleeEvents.length > 0 && `⚔ ${meleeEvents.length}`}
+            {attackEvents.length === 0 && '—'}
             {moraleEvents.length > 0 ? ` · ${moraleEvents.length} morálka` : ''}
           </span>
         </div>
@@ -59,13 +63,15 @@ function BKRound({ snapshot }: { snapshot: BKSnapshot }) {
           {/* Attack events */}
           {attackEvents.length > 0 && (
             <div className="px-4 py-3 space-y-2">
-              <div className="text-xs text-parchment-dark uppercase tracking-wider mb-2">Útoky</div>
+              <div className="text-xs text-parchment-dark uppercase tracking-wider mb-2">
+                {rangedEvents.length > 0 && meleeEvents.length > 0 ? 'Střelba & Melee' : rangedEvents.length > 0 ? 'Střelba (pre-kolo)' : 'Melee'}
+              </div>
               {attackEvents.map((ev, i) => (
                 <div key={i} className="text-sm">
                   <div className="flex items-center gap-2 flex-wrap">
                     {/* Attacker name + arrow */}
                     <span className={ev.hit ? 'text-parchment font-semibold' : 'text-parchment-dark'}>
-                      ⚔ {ev.attacker}
+                      {ev.ranged ? '🏹' : '⚔'} {ev.attacker}
                     </span>
                     <span className="text-parchment-dark">→</span>
                     <span className={ev.hit ? 'text-parchment font-semibold' : 'text-parchment-dark'}>

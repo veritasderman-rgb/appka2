@@ -174,6 +174,8 @@ export interface BattleLogEntry {
   critical?: 'hit' | 'miss';
   morale_check?: { rolled: number; needed: number; passed: boolean };
   fatigue_state?: 'fresh' | 'tired' | 'exhausted' | 'collapsed';
+  /** true when this attack is a ranged (pre-melee) attack */
+  ranged?: boolean;
 }
 
 export const DEFAULT_CONFIG: BattleConfig = {
