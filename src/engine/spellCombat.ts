@@ -96,6 +96,20 @@ export interface SpellCastResult {
 }
 
 /**
+ * How many times each individual mage's spell multiplies based on specialisation.
+ *
+ * MG  (Mágové)              — 1× count  (každý mág sešle 1 kouzlo)
+ * BM  (Bitevní mágové)      — 2× count  (trénovaní pro válku, dvojnásobný výstup)
+ * SP  (Specializovaní BM)   — 3× count  (elitní bojová magie)
+ * DR / KN / ostatní         — 1× count
+ */
+function spellCastingMultiplier(unitType: string): number {
+  if (unitType === 'BM') return 2;
+  if (unitType === 'SP') return 3;
+  return 1;
+}
+
+/**
  * Cast a spell during a BK. Returns the result or null if no spell was cast.
  *
  * @param caster - The casting combat unit
@@ -130,19 +144,22 @@ export function castSpellInBK(
   let buff: ActiveBuff | undefined;
   let cc: ActiveCC | undefined;
 
+  const classMult = spellCastingMultiplier(caster.unit.type);
+
   switch (combat.type) {
     case 'damage': {
-      // Scale damage: base avg damage. AoE spells affect more soldiers proportionally
       const baseDmg = combat.avgDamage ?? 0;
       // Upcast bonus: +15% per slot level above base
       const upcastMult = 1 + (slotLevel - spell.level) * 0.15;
-      damageDealt = Math.round(baseDmg * upcastMult);
+      // Each mage contributes their spell; BM casts 2×, SP casts 3× per mage
+      damageDealt = Math.round(baseDmg * upcastMult * caster.count * classMult);
       kills = Math.min(Math.floor(damageDealt / target.unit.hp_per_soldier), target.count);
       break;
     }
     case 'heal': {
       const baseHeal = combat.avgHeal ?? 0;
-      healAmount = Math.round(baseHeal);
+      // Each healer contributes; same class multiplier applies
+      healAmount = Math.round(baseHeal * caster.count * classMult);
       // Restore soldiers: healAmount / hp_per_soldier
       const maxRestore = caster.unit.count - caster.count + caster.total_losses;
       soldiersRestored = Math.min(
