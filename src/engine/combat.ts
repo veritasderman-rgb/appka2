@@ -1,6 +1,9 @@
 import { d20, rollDamage, rollDie } from './dice';
-import type { BattleConfig, BattleLogEntry, Terrain, Unit } from './types';
+import type { BattleConfig, BattleLogEntry, Terrain, Unit, UnitType } from './types';
 import { TERRAIN_MODIFIERS } from './types';
+
+/** Unit types considered ranged — penalised by night */
+const RANGED_TYPES: UnitType[] = ['LS', 'TS', 'HR', 'OS', 'SJ'];
 
 export interface CombatUnit {
   unit: Unit;
@@ -14,11 +17,34 @@ export interface CombatUnit {
   critical_misses: number;
   /** true if this unit belongs to the defending army (gets terrain bonuses) */
   isBattleDefender: boolean;
+  /** Remaining ammo for ranged units (undefined = unlimited / melee) */
+  ammo_remaining?: number;
 }
 
-export function createCombatUnit(unit: Unit, isBattleDefender: boolean = false): CombatUnit {
+/** Returns true when this unit type is ranged */
+export function isRangedUnit(unit: CombatUnit): boolean {
+  return RANGED_TYPES.includes(unit.unit.type) && (unit.ammo_remaining === undefined || unit.ammo_remaining > 0);
+}
+
+/** Calculate commander bonuses — applied when commanderBonuses config is enabled */
+export function getCommanderBonuses(unit: Unit): { initiativeBonus: number; thac0Bonus: number } {
+  const cmd = unit.commander;
+  if (!cmd) return { initiativeBonus: 0, thac0Bonus: 0 };
+  const initiativeBonus = Math.floor(cmd.level / 5);
+  const starTotal = cmd.stars ? Object.values(cmd.stars).reduce((s, v) => s + v, 0) : 0;
+  const thac0Bonus = -Math.floor(starTotal / 3); // negative = better attack
+  return { initiativeBonus, thac0Bonus };
+}
+
+export function createCombatUnit(unit: Unit, isBattleDefender: boolean = false, applyCommanderBonuses = false): CombatUnit {
+  const effectiveUnit = { ...unit, max_count: Math.max(unit.count, unit.max_count) };
+  if (applyCommanderBonuses) {
+    const { initiativeBonus, thac0Bonus } = getCommanderBonuses(unit);
+    effectiveUnit.initiative = unit.initiative + initiativeBonus;
+    effectiveUnit.thac0 = unit.thac0 + thac0Bonus;
+  }
   return {
-    unit: { ...unit, max_count: Math.max(unit.count, unit.max_count) },
+    unit: effectiveUnit,
     count: unit.count,
     fatigue_remaining: unit.fatigue,
     morale_failures: 0,
@@ -28,6 +54,7 @@ export function createCombatUnit(unit: Unit, isBattleDefender: boolean = false):
     critical_hits: 0,
     critical_misses: 0,
     isBattleDefender,
+    ammo_remaining: RANGED_TYPES.includes(unit.type) ? (unit.ammo ?? 10) : undefined,
   };
 }
 
@@ -76,6 +103,54 @@ export interface ClashResult {
   defenderLosses: number;
 }
 
+export interface RangedAttackResult {
+  log: BattleLogEntry;
+  kills: number;
+}
+
+/**
+ * Resolve a single ranged attack (pre-melee phase, BK 1–2).
+ * Up to 100 soldiers fire per BK. Night gives +2 THAC0 penalty.
+ */
+export function simulateRangedAttack(
+  atk: CombatUnit,
+  def: CombatUnit,
+  bk: number,
+  config: BattleConfig,
+): RangedAttackResult {
+  const nightTHAC0 = config.timeOfDay === 'night' ? 2 : 0;
+  const effectiveCount = Math.min(atk.count, 100);
+  const needed = atk.unit.thac0 + nightTHAC0 - def.unit.ac;
+
+  const roll = d20();
+  let hit = false;
+  let damage = 0;
+  let critical: 'hit' | 'miss' | undefined;
+
+  if (roll === 1) {
+    critical = 'miss';
+  } else if (roll === 20) {
+    critical = 'hit';
+    hit = true;
+    const critMult = rollDie(4);
+    const multiplier = critMult === 1 ? 8 : critMult;
+    damage = rollDamage(atk.unit.dmg) * multiplier * effectiveCount;
+  } else {
+    hit = roll >= needed;
+    if (hit) {
+      damage = rollDamage(atk.unit.dmg) * effectiveCount;
+    }
+  }
+
+  const hps = def.unit.hp_per_soldier > 0 ? def.unit.hp_per_soldier : 1;
+  const kills = hit ? Math.min(Math.floor(damage / hps), def.count) : 0;
+
+  return {
+    log: { bk, attacker: atk.unit.name, defender: def.unit.name, roll, needed, hit, damage, kills, critical, ranged: true },
+    kills,
+  };
+}
+
 /**
  * Simulate one BK (battle round = 10 combat rounds) between two units.
  * Each side attacks once (or twice based on initiative).
@@ -108,9 +183,12 @@ export function simulateBK(
     return { logs, attackerLosses, defenderLosses };
   }
 
+  // Night penalty: -2 to initiative for both sides
+  const nightIniPenalty = config.timeOfDay === 'night' ? -2 : 0;
+
   // Initiative roll
-  const iniA = d20() + attacker.unit.initiative;
-  const iniB = d20() + defender.unit.initiative;
+  const iniA = d20() + attacker.unit.initiative + nightIniPenalty;
+  const iniB = d20() + defender.unit.initiative + nightIniPenalty;
 
   const first = iniA >= iniB ? attacker : defender;
   const second = iniA >= iniB ? defender : attacker;
@@ -144,9 +222,9 @@ export function simulateBK(
     }
   }
 
-  // Morale checks
-  checkMorale(attacker, bk, logs);
-  checkMorale(defender, bk, logs);
+  // Morale checks (pass BK-specific losses for accurate threshold)
+  checkMorale(attacker, bk, logs, attackerLosses);
+  checkMorale(defender, bk, logs, defenderLosses);
 
   // Fatigue
   updateFatigue(attacker);
@@ -165,14 +243,14 @@ function resolveAttack(
   def: CombatUnit,
   bk: number,
   config: BattleConfig,
-  isFirstAttack: boolean,
+  _isFirstAttack: boolean,
   atkMods: SpellModifiers = NO_MODS,
   defMods: SpellModifiers = NO_MODS,
 ): AttackResult {
   const logs: BattleLogEntry[] = [];
   if (atk.count <= 0 || def.count <= 0) return { logs, kills: 0 };
 
-  let effectiveCount = getEffectiveCount(atk, isFirstAttack ? bk : bk, config.largeBattle);
+  let effectiveCount = getEffectiveCount(atk, bk, config.largeBattle);
   // Reduce effective count by CC disable fraction
   if (atkMods.disabledFraction > 0) {
     effectiveCount = Math.max(1, Math.floor(effectiveCount * (1 - atkMods.disabledFraction)));
@@ -182,11 +260,13 @@ function resolveAttack(
   const fatiguePenalty = getFatiguePenalty(atk.fatigue_state);
   // Terrain THAC0 penalty applies to units of the attacking army
   const terrainTHAC0 = !atk.isBattleDefender ? getTerrainTHAC0Penalty(config.terrain) : 0;
+  // Night penalty: +2 THAC0 for ranged units (harder to aim in the dark)
+  const nightTHAC0 = config.timeOfDay === 'night' && RANGED_TYPES.includes(atk.unit.type) ? 2 : 0;
   // Terrain AC bonus applies to units of the defending army
   const terrainAC = getTerrainACBonus(config.terrain, def.isBattleDefender);
 
   // Effective THAC0 (higher = worse for attacker) + spell buff to attacker's THAC0
-  const effectiveThac0 = atk.unit.thac0 + fatiguePenalty + terrainTHAC0 + atkMods.thac0Mod;
+  const effectiveThac0 = atk.unit.thac0 + fatiguePenalty + terrainTHAC0 + nightTHAC0 + atkMods.thac0Mod;
   // Effective AC (lower = better for defender) + spell buff to defender's AC
   const effectiveAC = def.unit.ac - terrainAC + defMods.acMod;
 
@@ -225,7 +305,8 @@ function resolveAttack(
     totalDamage = Math.max(1, totalDamage - fatiguePenalty * effectiveCount);
   }
 
-  const kills = hit ? Math.floor(totalDamage / def.unit.hp_per_soldier) : 0;
+  const defHps = def.unit.hp_per_soldier > 0 ? def.unit.hp_per_soldier : 1;
+  const kills = hit ? Math.floor(totalDamage / defHps) : 0;
 
   logs.push({
     bk,
@@ -243,14 +324,14 @@ function resolveAttack(
   return { logs, kills: Math.min(kills, def.count) };
 }
 
-function checkMorale(unit: CombatUnit, bk: number, logs: BattleLogEntry[]) {
+function checkMorale(unit: CombatUnit, bk: number, logs: BattleLogEntry[], bkLosses: number = 0) {
   if (unit.count <= 0) return;
 
   const lossPercent = unit.total_losses / unit.unit.max_count;
-  const bkLossPercent = unit.total_losses / unit.unit.max_count; // simplified
+  const bkLossPercent = unit.unit.max_count > 0 ? bkLosses / unit.unit.max_count : 0;
 
-  // Check morale if >25% lost in this context or >50% total
-  const needsCheck = lossPercent > 0.25 || bkLossPercent > 0.5;
+  // Check morale if >25% cumulative losses OR >10% losses in this single BK
+  const needsCheck = lossPercent > 0.25 || bkLossPercent > 0.10;
   if (!needsCheck) return;
 
   const fatiguePenalty = getFatiguePenalty(unit.fatigue_state);

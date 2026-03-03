@@ -10,16 +10,17 @@ interface ArmyPanelProps {
   onClear: () => void;
   title: string;
   side: 'alliance' | 'enemy';
+  isAttacker?: boolean;
 }
 
-export function ArmyPanel({ units, onRemove, onCountChange, onSpellToggle, onClear, title, side }: ArmyPanelProps) {
+export function ArmyPanel({ units, onRemove, onCountChange, onSpellToggle, onClear, title, side, isAttacker }: ArmyPanelProps) {
   const totalSoldiers = units.reduce((s, u) => s + u.count, 0);
-  const avgZU = units.length > 0
+  const avgZU = totalSoldiers > 0
     ? (units.reduce((s, u) => s + u.zu * u.count, 0) / totalSoldiers).toFixed(1)
     : '0';
 
   const totalDmgPerBK = units.reduce((s, u) => {
-    const dmg = avgDamage(u.dmg) * Math.min(u.count, 100);
+    const dmg = avgDamage(u.dmg) * u.count;
     return s + dmg;
   }, 0);
 
@@ -28,7 +29,18 @@ export function ArmyPanel({ units, onRemove, onCountChange, onSpellToggle, onCle
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between mb-3">
-        <h2 className={`text-lg font-bold text-${sideColor}-light`}>{title}</h2>
+        <div className="flex items-center gap-2">
+          <h2 className={`text-lg font-bold text-${sideColor}-light`}>{title}</h2>
+          {isAttacker !== undefined && (
+            <span className={`text-xs px-1.5 py-0.5 rounded border ${
+              isAttacker
+                ? 'border-blood/40 text-blood-light bg-blood/10'
+                : 'border-alliance/40 text-parchment-dark bg-dark-surface'
+            }`}>
+              {isAttacker ? '⚔ útočník' : '🛡 obránce'}
+            </span>
+          )}
+        </div>
         {units.length > 0 && (
           <button
             onClick={onClear}

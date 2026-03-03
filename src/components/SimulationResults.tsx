@@ -148,6 +148,7 @@ export function SimulationResults({ result, onBack }: SimulationResultsProps) {
                 <th className="text-right py-2 px-2">Původní</th>
                 <th className="text-right py-2 px-2">Prům. zbylých</th>
                 <th className="text-right py-2 px-2">Prům. mrtvých</th>
+                <th className="text-right py-2 px-2" title="Odhad zraněných, kteří se mohou zotavit po bitvě (survival_percent × mrtví)">Obnova</th>
                 <th className="text-right py-2 px-2">Nejlepší</th>
                 <th className="text-right py-2 px-2">Nejhorší</th>
               </tr>
@@ -160,12 +161,13 @@ export function SimulationResults({ result, onBack }: SimulationResultsProps) {
                   <td className="text-right py-1.5 px-2">{u.original}</td>
                   <td className="text-right py-1.5 px-2">{u.avg_remaining}</td>
                   <td className="text-right py-1.5 px-2 text-blood-light">{u.avg_dead}</td>
+                  <td className="text-right py-1.5 px-2 text-green-400">{u.estimated_recovery > 0 ? `+${u.estimated_recovery}` : '—'}</td>
                   <td className="text-right py-1.5 px-2 text-parchment-dark">{u.best_remaining}</td>
                   <td className="text-right py-1.5 px-2 text-parchment-dark">{u.worst_remaining}</td>
                 </tr>
               ))}
               {/* Separator */}
-              <tr><td colSpan={6} className="py-1 border-b-2 border-dark-border" /></tr>
+              <tr><td colSpan={7} className="py-1 border-b-2 border-dark-border" /></tr>
               {/* Enemy */}
               {result.avg_losses.army_b.by_unit.map(u => (
                 <tr key={u.name} className="border-b border-dark-border/50 hover:bg-dark-hover">
@@ -173,6 +175,7 @@ export function SimulationResults({ result, onBack }: SimulationResultsProps) {
                   <td className="text-right py-1.5 px-2">{u.original}</td>
                   <td className="text-right py-1.5 px-2">{u.avg_remaining}</td>
                   <td className="text-right py-1.5 px-2 text-blood-light">{u.avg_dead}</td>
+                  <td className="text-right py-1.5 px-2 text-green-400">{u.estimated_recovery > 0 ? `+${u.estimated_recovery}` : '—'}</td>
                   <td className="text-right py-1.5 px-2 text-parchment-dark">{u.best_remaining}</td>
                   <td className="text-right py-1.5 px-2 text-parchment-dark">{u.worst_remaining}</td>
                 </tr>

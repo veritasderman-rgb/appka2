@@ -3,9 +3,10 @@ import { useBattleStore } from './store/battleStore';
 import { ArmyBuilder } from './components/ArmyBuilder';
 import { SimulationResults } from './components/SimulationResults';
 import { UnitEditor } from './components/UnitEditor';
+import { HexMapView } from './components/HexMapView';
 
 function App() {
-  const { screen, setScreen, result } = useBattleStore();
+  const { screen, setScreen, result, hexResult } = useBattleStore();
 
   return (
     <div className="min-h-screen bg-dark-bg flex flex-col">
@@ -52,6 +53,19 @@ function App() {
             >
               Výsledky
             </button>
+            <button
+              onClick={() => hexResult && setScreen('hexmap')}
+              disabled={!hexResult}
+              className={`px-3 py-1.5 rounded text-sm border transition-all ${
+                screen === 'hexmap'
+                  ? 'bg-gold/10 border-gold text-gold'
+                  : hexResult
+                    ? 'border-dark-border text-parchment-dark hover:text-parchment'
+                    : 'border-dark-border/50 text-parchment-dark/30 cursor-not-allowed'
+              }`}
+            >
+              Hex Mapa
+            </button>
           </div>
         </div>
       </header>
@@ -63,6 +77,14 @@ function App() {
         {screen === 'results' && result && (
           <SimulationResults
             result={result}
+            onBack={() => setScreen('builder')}
+          />
+        )}
+        {screen === 'hexmap' && hexResult && (
+          <HexMapView
+            result={hexResult}
+            armyALabel="Aliance"
+            armyBLabel="Nepřátelé"
             onBack={() => setScreen('builder')}
           />
         )}

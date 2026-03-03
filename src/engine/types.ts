@@ -110,6 +110,9 @@ export interface UnitResult {
   morale_failure_rate: number;
   avg_critical_hits: number;
   avg_critical_misses: number;
+  /** Estimated soldiers that could recover after battle (avg_dead * survival_percent) */
+  estimated_recovery: number;
+  survival_percent: number;
 }
 
 export interface ArmyLosses {
@@ -174,6 +177,8 @@ export interface BattleLogEntry {
   critical?: 'hit' | 'miss';
   morale_check?: { rolled: number; needed: number; passed: boolean };
   fatigue_state?: 'fresh' | 'tired' | 'exhausted' | 'collapsed';
+  /** true when this attack is a ranged (pre-melee) attack */
+  ranged?: boolean;
 }
 
 export const DEFAULT_CONFIG: BattleConfig = {
