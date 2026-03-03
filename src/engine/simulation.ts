@@ -243,7 +243,6 @@ function simulateSingleBattle(
     // In BK 1-2, ranged units are busy in the ranged phase — exclude them from melee
     const meleeFilter = (u: CombatUnitWithSpells) =>
       !isDefeated(u.combat) && (bk > 2 || !isRangedUnit(u.combat));
-
     const matchups = createMatchups(
       armyA.filter(meleeFilter),
       armyB.filter(meleeFilter)
@@ -397,11 +396,14 @@ export function runSimulation(
       const total_failures = stats.reduce((s, st) => s + st.morale_failures, 0);
       const avg_critical_hits = stats.length > 0 ? stats.reduce((s, st) => s + st.critical_hits, 0) / stats.length : 0;
       const avg_critical_misses = stats.length > 0 ? stats.reduce((s, st) => s + st.critical_misses, 0) / stats.length : 0;
+      const avg_dead = u.count - Math.round(avg);
+      const survival_percent = u.survival_percent ?? 0;
+      const estimated_recovery = Math.round(avg_dead * (survival_percent / 100));
       return {
         name: u.name,
         original: u.count,
         avg_remaining: Math.round(avg),
-        avg_dead: u.count - Math.round(avg),
+        avg_dead,
         best_remaining: best,
         worst_remaining: worst,
         times_destroyed,
@@ -411,8 +413,8 @@ export function runSimulation(
         morale_failure_rate: total_checks > 0 ? Math.round((total_failures / total_checks) * 100) : 0,
         avg_critical_hits: Math.round(avg_critical_hits * 10) / 10,
         avg_critical_misses: Math.round(avg_critical_misses * 10) / 10,
-        survival_percent: u.survival_percent ?? 0,
-        estimated_recovery: Math.round((u.count - Math.round(avg)) * ((u.survival_percent ?? 0) / 100)),
+        survival_percent,
+        estimated_recovery,
       };
     });
   }
@@ -425,20 +427,6 @@ export function runSimulation(
   const aTotalLosses = aUnitResults.reduce((s, r) => s + r.avg_dead, 0);
   const bTotalLosses = bUnitResults.reduce((s, r) => s + r.avg_dead, 0);
 
-  const keyFactors: string[] = [];
-  if (wins.army_a > wins.army_b * 2) {
-    keyFactors.push('Spojenci mají výraznou převahu v simulacích.');
-  }
-  if (wins.army_b > wins.army_a * 2) {
-    keyFactors.push('Nepřátelé mají výraznou převahu v simulacích.');
-  }
-
-  const sortedByImpact = [...aUnitResults, ...bUnitResults]
-    .sort((a, b) => (b.original - b.avg_remaining) - (a.original - a.avg_remaining));
-  if (sortedByImpact.length > 0) {
-    keyFactors.push(`Nejvíce ztrát utrpěla jednotka "${sortedByImpact[0].name}" (průměrně ${sortedByImpact[0].avg_dead} mrtvých).`);
-  }
-
   const avgDuration = totalBK / n;
   const minBK = allBKs.length > 0 ? Math.min(...allBKs) : 0;
   const maxBK = allBKs.length > 0 ? Math.max(...allBKs) : 0;
@@ -447,10 +435,51 @@ export function runSimulation(
     : 0;
   const stddevBK = Math.round(Math.sqrt(varianceBK) * 10) / 10;
 
-  if (avgDuration <= 5) {
-    keyFactors.push('Bitvy jsou rozhodovány rychle (do 5 BK).');
-  } else if (avgDuration >= 15) {
-    keyFactors.push('Bitvy jsou zdlouhavé a vyčerpávající (15+ BK).');
+  const keyFactors: string[] = [];
+
+  // Overall outcome
+  const aWinPct = Math.round((wins.army_a / n) * 100);
+  const bWinPct = Math.round((wins.army_b / n) * 100);
+  if (aWinPct >= 80) keyFactors.push(`Spojenci dominují — vítězí v ${aWinPct}% simulací. Výsledek bitvy je prakticky jistý.`);
+  else if (bWinPct >= 80) keyFactors.push(`Nepřátelé dominují — vítězí v ${bWinPct}% simulací. Výsledek bitvy je prakticky jistý.`);
+  else if (aWinPct > bWinPct) keyFactors.push(`Spojenci mají navrch (${aWinPct}% výher), ale výsledek není jistý.`);
+  else if (bWinPct > aWinPct) keyFactors.push(`Nepřátelé mají navrch (${bWinPct}% výher), ale výsledek není jistý.`);
+  else keyFactors.push(`Bitva je vyrovnaná — každá strana má podobnou šanci na vítězství.`);
+
+  // Most casualties unit
+  const sortedByImpact = [...aUnitResults, ...bUnitResults]
+    .sort((a, b) => b.avg_dead - a.avg_dead);
+  if (sortedByImpact.length > 0 && sortedByImpact[0].avg_dead > 0) {
+    const u = sortedByImpact[0];
+    keyFactors.push(`Největší ztráty: "${u.name}" průměrně ztrácí ${u.avg_dead} vojáků (${Math.round(u.avg_dead / u.original * 100)}% původní síly).`);
+  }
+
+  // Units with high destruction rate
+  const fragileUnits = [...aUnitResults, ...bUnitResults].filter(u => u.destruction_rate >= 50);
+  if (fragileUnits.length > 0) {
+    const names = fragileUnits.map(u => `"${u.name}" (${u.destruction_rate}%)`).join(', ');
+    keyFactors.push(`Jednotky s vysokou šancí zničení: ${names}.`);
+  }
+
+  // Morale issues
+  const moraleProblems = [...aUnitResults, ...bUnitResults].filter(u => u.morale_failure_rate >= 40 && u.avg_morale_checks > 0);
+  if (moraleProblems.length > 0) {
+    const worst = moraleProblems.sort((a, b) => b.morale_failure_rate - a.morale_failure_rate)[0];
+    keyFactors.push(`Morální problém: "${worst.name}" selhává v ${worst.morale_failure_rate}% hodů morálky — hrozí útěk.`);
+  }
+
+  // Battle duration
+  if (avgDuration <= 3) {
+    keyFactors.push(`Velmi rychlá bitva (průměr ${Math.round(avgDuration * 10) / 10} BK) — jeden úder rozhodne.`);
+  } else if (avgDuration <= 6) {
+    keyFactors.push(`Krátká bitva (průměr ${Math.round(avgDuration * 10) / 10} BK) — rychlé rozhodnutí.`);
+  } else if (avgDuration >= 20) {
+    keyFactors.push(`Vyčerpávající bitva (průměr ${Math.round(avgDuration * 10) / 10} BK) — únava může být rozhodující.`);
+  }
+
+  // High variance in duration
+  if (stddevBK >= 5 && n >= 10) {
+    keyFactors.push(`Velká variabilita délky bitev (±${stddevBK} BK) — výsledek závisí na náhodě.`);
   }
 
   const simulationResult: SimulationResult = {
