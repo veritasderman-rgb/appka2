@@ -15,11 +15,12 @@ export function ArmyBuilder() {
     customAllianceUnits, customEnemyUnits,
     config, setConfig,
     runBattle, isSimulating, simulationProgress,
+    runHexBattleAction, isHexSimulating,
   } = useBattleStore();
 
   const [activeSide, setActiveSide] = useState<'alliance' | 'enemy'>('alliance');
 
-  const canSimulate = armyA.length > 0 && armyB.length > 0 && !isSimulating;
+  const canSimulate = armyA.length > 0 && armyB.length > 0 && !isSimulating && !isHexSimulating;
 
   return (
     <div className="flex flex-col h-full gap-4">
@@ -109,8 +110,8 @@ export function ArmyBuilder() {
         </div>
       </div>
 
-      {/* Run button */}
-      <div className="flex justify-center py-2">
+      {/* Run buttons */}
+      <div className="flex justify-center gap-3 py-2 flex-wrap">
         <button
           onClick={runBattle}
           disabled={!canSimulate}
@@ -127,6 +128,25 @@ export function ArmyBuilder() {
             </span>
           ) : (
             'Spustit simulaci'
+          )}
+        </button>
+        <button
+          onClick={runHexBattleAction}
+          disabled={!canSimulate}
+          title="Spustí jednu bitvu na hexové mapě s generálem přidělujícím útočné vektory"
+          className={`px-6 py-3 rounded-lg font-bold text-base border transition-all ${
+            canSimulate
+              ? 'border-blue-600 text-blue-300 hover:bg-blue-900/30 shadow-lg shadow-blue-900/20'
+              : 'bg-dark-surface text-parchment-dark border-dark-border cursor-not-allowed'
+          }`}
+        >
+          {isHexSimulating ? (
+            <span className="flex items-center gap-2">
+              Generuji mapu...
+              <span className="inline-block w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+            </span>
+          ) : (
+            '⬡ Hex Bitva'
           )}
         </button>
       </div>

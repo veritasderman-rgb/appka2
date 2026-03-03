@@ -2,9 +2,11 @@ import { create } from 'zustand';
 import type { BattleConfig, SimulationResult, Unit } from '../engine/types';
 import { DEFAULT_CONFIG, MAGICAL_UNIT_TYPES } from '../engine/types';
 import { runSimulation } from '../engine/simulation';
+import { runHexBattle } from '../engine/hexBattle';
+import type { HexBattleResult } from '../engine/hexBattle';
 import { getCasterClassForUnitType, getAvailableSpells, snapCasterLevel } from '../data/spells';
 
-type Screen = 'builder' | 'results' | 'units';
+type Screen = 'builder' | 'results' | 'units' | 'hexmap';
 
 /** Spell state for a magical unit in an army */
 export interface UnitSpellState {
@@ -55,7 +57,11 @@ interface BattleState {
   isSimulating: boolean;
   simulationProgress: number;
 
+  hexResult: HexBattleResult | null;
+  isHexSimulating: boolean;
+
   runBattle: () => void;
+  runHexBattleAction: () => void;
 }
 
 // Load custom units from localStorage
@@ -185,6 +191,19 @@ export const useBattleStore = create<BattleState>((set, get) => ({
   result: null,
   isSimulating: false,
   simulationProgress: 0,
+
+  hexResult: null,
+  isHexSimulating: false,
+
+  runHexBattleAction: () => {
+    const { armyA, armyB, config } = get();
+    if (armyA.length === 0 || armyB.length === 0) return;
+    set({ isHexSimulating: true });
+    setTimeout(() => {
+      const hexResult = runHexBattle(armyA, armyB, config);
+      set({ hexResult, isHexSimulating: false, screen: 'hexmap' });
+    }, 50);
+  },
 
   runBattle: () => {
     const { armyA, armyB, config } = get();
