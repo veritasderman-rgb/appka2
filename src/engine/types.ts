@@ -179,6 +179,8 @@ export interface BattleLogEntry {
   fatigue_state?: 'fresh' | 'tired' | 'exhausted' | 'collapsed';
   /** true when this attack is a ranged (pre-melee) attack */
   ranged?: boolean;
+  /** Spell effect description (e.g. "heal:5", "buff:0.75", "cc:0.15") */
+  spellEffect?: string;
 }
 
 export const DEFAULT_CONFIG: BattleConfig = {
