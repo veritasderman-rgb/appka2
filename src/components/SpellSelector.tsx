@@ -1,10 +1,49 @@
 import type { UnitSpellState } from '../store/battleStore';
 import { getSpellById } from '../data/spells';
 import type { SpellCombatEffect, SpellEffectType } from '../data/spells';
+import type { UnitType } from '../engine/types';
 
 interface SpellSelectorProps {
   spells: UnitSpellState[];
   onToggle: (spellId: string) => void;
+  unitCount?: number;
+  unitType?: UnitType;
+}
+
+function getCastingMultiplier(unitType?: UnitType): number {
+  if (unitType === 'BM') return 2;
+  if (unitType === 'SP') return 3;
+  return 1;
+}
+
+function formatScaling(combat: SpellCombatEffect, unitCount: number, unitType?: UnitType): string | null {
+  if (!unitCount || unitCount === 0) return null;
+  const mult = getCastingMultiplier(unitType);
+  const affected = unitCount * mult;
+  const multLabel = mult > 1 ? ` (×${mult})` : '';
+
+  switch (combat.type) {
+    case 'damage': {
+      const totalDmg = (combat.avgDamage ?? 0) * affected;
+      return `${unitCount} sesílatelů${multLabel} → ${totalDmg} celkový dmg`;
+    }
+    case 'heal': {
+      const totalHeal = (combat.avgHeal ?? 0) * affected;
+      return `${unitCount} sesílatelů${multLabel} → +${totalHeal} ŽP celkem`;
+    }
+    case 'buff':
+      return `${affected} osob pokryto${multLabel} — škáluje s velikostí cíle`;
+    case 'cc': {
+      const frac = combat.disableFraction ?? 0.1;
+      return `${affected} osob${multLabel} → ${Math.round(frac * 100)}% disable (škáluje s cílem)`;
+    }
+    case 'debuff': {
+      const totalDmg = (combat.avgDamage ?? 0) * affected;
+      return `${unitCount} sesílatelů${multLabel} → ${totalDmg} dmg + debuff`;
+    }
+    default:
+      return null;
+  }
 }
 
 const EFFECT_LABELS: Record<SpellEffectType, string> = {
@@ -78,7 +117,7 @@ function formatEffect(combat: SpellCombatEffect): string {
   return parts.join(' · ');
 }
 
-export function SpellSelector({ spells, onToggle }: SpellSelectorProps) {
+export function SpellSelector({ spells, onToggle, unitCount, unitType }: SpellSelectorProps) {
   if (spells.length === 0) return null;
 
   // Group spells by level, include full definition
@@ -129,6 +168,14 @@ export function SpellSelector({ spells, onToggle }: SpellSelectorProps) {
                         {EFFECT_ICONS[spell.combat.type]} {EFFECT_LABELS[spell.combat.type]}
                         {effectText ? ` · ${effectText}` : ''}
                       </div>
+                      {unitCount != null && unitCount > 0 && (() => {
+                        const scaling = formatScaling(spell.combat, unitCount, unitType);
+                        return scaling ? (
+                          <div className="text-xs mt-0.5 text-parchment-dark opacity-70">
+                            ↳ {scaling}
+                          </div>
+                        ) : null;
+                      })()}
                     </div>
                   </label>
                 );

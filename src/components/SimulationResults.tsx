@@ -1,6 +1,7 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import type { SimulationResult } from '../engine/types';
 import { BattleLog } from './BattleLog';
+import { SpellTimeline } from './SpellTimeline';
 
 interface SimulationResultsProps {
   result: SimulationResult;
@@ -242,6 +243,59 @@ export function SimulationResults({ result, onBack }: SimulationResultsProps) {
         <p className="text-xs text-parchment-dark mt-2 opacity-60">Průměry přes {result.total_simulations} simulací. Úsp. morálky = % hodů, kdy jednotka prošla. Šance zničení = % simulací s nulou vojáků.</p>
       </div>
 
+      {/* Spell statistics table */}
+      {(() => {
+        const allUnits = [...result.avg_losses.army_a.by_unit, ...result.avg_losses.army_b.by_unit];
+        const magicUnits = allUnits.filter(u => u.avg_spells_cast > 0);
+        if (magicUnits.length === 0) return null;
+
+        const aUnits = result.avg_losses.army_a.by_unit.filter(u => u.avg_spells_cast > 0);
+        const bUnits = result.avg_losses.army_b.by_unit.filter(u => u.avg_spells_cast > 0);
+
+        return (
+          <div className="bg-dark-card border border-dark-border rounded-lg p-4">
+            <h3 className="text-gold font-bold mb-3">🔮 Magické statistiky</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-parchment-dark border-b border-dark-border">
+                    <th className="text-left py-2 px-2">Jednotka</th>
+                    <th className="text-right py-2 px-2" title="Průměrný počet seslaných kouzel za bitvu">Sesláno</th>
+                    <th className="text-right py-2 px-2" title="Průměrný spell damage za bitvu">Spell Dmg</th>
+                    <th className="text-right py-2 px-2" title="Průměrný počet zabitých kouzly">Zabito</th>
+                    <th className="text-right py-2 px-2" title="Průměrný počet vyléčených vojáků">Vyléčeno</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {aUnits.map(u => (
+                    <tr key={u.name} className="border-b border-dark-border/50 hover:bg-dark-hover">
+                      <td className="py-1.5 px-2 text-alliance-light">{u.name}</td>
+                      <td className="text-right py-1.5 px-2 text-purple-300">{u.avg_spells_cast}</td>
+                      <td className="text-right py-1.5 px-2 text-blood-light">{u.avg_spell_damage}</td>
+                      <td className="text-right py-1.5 px-2 text-blood-light">{u.avg_spell_kills}</td>
+                      <td className="text-right py-1.5 px-2 text-green-400">{u.avg_spell_heals > 0 ? `+${u.avg_spell_heals}` : '—'}</td>
+                    </tr>
+                  ))}
+                  {aUnits.length > 0 && bUnits.length > 0 && (
+                    <tr><td colSpan={5} className="py-1 border-b-2 border-dark-border" /></tr>
+                  )}
+                  {bUnits.map(u => (
+                    <tr key={u.name} className="border-b border-dark-border/50 hover:bg-dark-hover">
+                      <td className="py-1.5 px-2 text-enemy-light">{u.name}</td>
+                      <td className="text-right py-1.5 px-2 text-purple-300">{u.avg_spells_cast}</td>
+                      <td className="text-right py-1.5 px-2 text-blood-light">{u.avg_spell_damage}</td>
+                      <td className="text-right py-1.5 px-2 text-blood-light">{u.avg_spell_kills}</td>
+                      <td className="text-right py-1.5 px-2 text-green-400">{u.avg_spell_heals > 0 ? `+${u.avg_spell_heals}` : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-parchment-dark mt-2 opacity-60">Průměry přes {result.total_simulations} simulací.</p>
+          </div>
+        );
+      })()}
+
       {/* Losses bar chart */}
       {lossesData.length > 0 && (
         <div className="bg-dark-card border border-dark-border rounded-lg p-4">
@@ -259,6 +313,11 @@ export function SimulationResults({ result, onBack }: SimulationResultsProps) {
             </BarChart>
           </ResponsiveContainer>
         </div>
+      )}
+
+      {/* Spell timeline (only when iterations = 1) */}
+      {result.detailed_log && (
+        <SpellTimeline log={result.detailed_log} />
       )}
 
       {/* Detailed battle log (only when iterations = 1) */}
