@@ -12,6 +12,7 @@ const EFFECT_LABELS: Record<SpellEffectType, string> = {
   heal: 'Léčení',
   buff: 'Posílení',
   cc: 'Zneschopnění',
+  debuff: 'Oslabení',
   utility: 'Podpůrné',
 };
 
@@ -20,6 +21,7 @@ const EFFECT_COLORS: Record<SpellEffectType, string> = {
   heal: 'text-green-400',
   buff: 'text-gold',
   cc: 'text-purple-400',
+  debuff: 'text-orange-400',
   utility: 'text-parchment-dark',
 };
 
@@ -28,6 +30,7 @@ const EFFECT_ICONS: Record<SpellEffectType, string> = {
   heal: '💚',
   buff: '✨',
   cc: '🌀',
+  debuff: '💀',
   utility: '⚙',
 };
 
@@ -55,6 +58,14 @@ function formatEffect(combat: SpellCombatEffect): string {
       if (combat.disableFraction) parts.push(`${Math.round(combat.disableFraction * 100)}% zneschopní`);
       if (combat.aoe) parts.push('AoE');
       break;
+    case 'debuff': {
+      if (combat.avgDamage) parts.push(`${combat.avgDamage} zr`);
+      const debuffs: string[] = [];
+      if (combat.thac0Bonus) debuffs.push(`ÚT +${combat.thac0Bonus}`);
+      if (combat.acBonus) debuffs.push(`OČ +${Math.abs(combat.acBonus)}`);
+      if (debuffs.length) parts.push(debuffs.join(', '));
+      break;
+    }
     case 'utility':
       break;
   }
