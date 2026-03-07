@@ -1,6 +1,7 @@
 import { createCombatUnit, isDefeated, isRangedUnit, simulateBK, simulateRangedAttack } from './combat';
 import type { CombatUnit, SpellModifiers } from './combat';
-import type { BattleConfig, BattleLogEntry, BKSnapshot, SimulationResult, Unit, UnitResult } from './types';
+import type { ActiveEffectInfo, BattleConfig, BattleLogEntry, BKSnapshot, SimulationResult, Unit, UnitResult } from './types';
+import { getSpellById } from '../data/spells';
 import {
   type SpellCombatState,
   type SpellCastResult,
@@ -20,6 +21,10 @@ interface UnitStats {
   morale_checks: number;
   critical_hits: number;
   critical_misses: number;
+  spells_cast: number;
+  spell_damage: number;
+  spell_kills: number;
+  spell_heals: number;
 }
 
 interface SingleBattleResult {
@@ -33,12 +38,20 @@ interface SingleBattleResult {
   snapshots: BKSnapshot[];
 }
 
+interface SpellStats {
+  spells_cast: number;
+  spell_damage: number;
+  spell_kills: number;
+  spell_heals: number;
+}
+
 /** Spell-aware wrapper for a combat unit */
 interface CombatUnitWithSpells {
   combat: CombatUnit;
   spellState?: SpellCombatState;
   buffs: ActiveBuff[];
   ccs: ActiveCC[];
+  spellStats: SpellStats;
 }
 
 /** Create matchups between armies based on movement priority */
@@ -153,6 +166,7 @@ function simulateSingleBattle(
       spellState: enabledIds.length > 0 ? initSpellState(combat, enabledIds) : undefined,
       buffs: [],
       ccs: [],
+      spellStats: { spells_cast: 0, spell_damage: 0, spell_kills: 0, spell_heals: 0 },
     };
   });
   const armyB: CombatUnitWithSpells[] = unitsB.map(u => {
@@ -163,6 +177,7 @@ function simulateSingleBattle(
       spellState: enabledIds.length > 0 ? initSpellState(combat, enabledIds) : undefined,
       buffs: [],
       ccs: [],
+      spellStats: { spells_cast: 0, spell_damage: 0, spell_kills: 0, spell_heals: 0 },
     };
   });
 
@@ -195,6 +210,10 @@ function simulateSingleBattle(
 
       allLogs.push(result.log);
       applySpellResult(result, unitA, target, aliveA);
+      unitA.spellStats.spells_cast++;
+      unitA.spellStats.spell_damage += result.damageDealt;
+      unitA.spellStats.spell_kills += result.kills;
+      unitA.spellStats.spell_heals += result.soldiersRestored;
     }
 
     // Army B casters cast
@@ -207,6 +226,10 @@ function simulateSingleBattle(
 
       allLogs.push(result.log);
       applySpellResult(result, unitB, target, aliveB);
+      unitB.spellStats.spells_cast++;
+      unitB.spellStats.spell_damage += result.damageDealt;
+      unitB.spellStats.spell_kills += result.kills;
+      unitB.spellStats.spell_heals += result.soldiersRestored;
     }
 
     // === RANGED PHASE (BK 1 and 2 only) ===
@@ -289,19 +312,50 @@ function simulateSingleBattle(
       u.ccs = tickCCs(u.ccs);
     }
 
-    // Capture snapshot for this BK
+    // Capture snapshot for this BK (after tick, so remaining durations are post-tick)
+    function buildActiveEffects(wrapper: CombatUnitWithSpells): ActiveEffectInfo[] {
+      const effects: ActiveEffectInfo[] = [];
+      for (const b of wrapper.buffs) {
+        const spellDef = getSpellById(b.spellId);
+        const name = spellDef?.name ?? b.spellId;
+        const parts: string[] = [];
+        if (b.acBonus) parts.push(`OČ ${b.acBonus}`);
+        if (b.thac0Bonus) parts.push(`ÚT ${b.thac0Bonus}`);
+        parts.push(`${Math.round(b.buffFraction * 100)}%`);
+        effects.push({ spellName: name, type: 'buff', description: parts.join(', '), remainingBK: b.remainingBK });
+      }
+      for (const c of wrapper.ccs) {
+        const spellDef = getSpellById(c.spellId);
+        const name = spellDef?.name ?? c.spellId;
+        if (c.disableFraction > 0) {
+          effects.push({ spellName: name, type: 'cc', description: `${Math.round(c.disableFraction * 100)}% disabled`, remainingBK: c.remainingBK });
+        }
+        if (c.debuffThac0 || c.debuffAC) {
+          const parts: string[] = [];
+          if (c.debuffThac0) parts.push(`ÚT +${c.debuffThac0}`);
+          if (c.debuffAC) parts.push(`OČ +${c.debuffAC}`);
+          if (c.disableFraction === 0) {
+            effects.push({ spellName: name, type: 'debuff', description: parts.join(', '), remainingBK: c.remainingBK });
+          }
+        }
+      }
+      return effects;
+    }
+
     const unitStates = [
       ...armyA.map(u => ({
         name: u.combat.unit.name,
         side: 'army_a' as const,
         count_before: countsBefore.get(u.combat.unit.id) ?? u.combat.count,
         count_after: Math.max(0, u.combat.count),
+        activeEffects: buildActiveEffects(u),
       })),
       ...armyB.map(u => ({
         name: u.combat.unit.name,
         side: 'army_b' as const,
         count_before: countsBefore.get(u.combat.unit.id) ?? u.combat.count,
         count_after: Math.max(0, u.combat.count),
+        activeEffects: buildActiveEffects(u),
       })),
     ];
     snapshots.push({ bk, events: allLogs.slice(bkLogsStart), unit_states: unitStates });
@@ -325,6 +379,7 @@ function simulateSingleBattle(
       morale_checks: u.combat.morale_checks,
       critical_hits: u.combat.critical_hits,
       critical_misses: u.combat.critical_misses,
+      ...u.spellStats,
     });
   }
   const army_b_remaining = new Map<string, number>();
@@ -336,6 +391,7 @@ function simulateSingleBattle(
       morale_checks: u.combat.morale_checks,
       critical_hits: u.combat.critical_hits,
       critical_misses: u.combat.critical_misses,
+      ...u.spellStats,
     });
   }
 
@@ -417,6 +473,11 @@ export function runSimulation(
       const avg_dead = u.count - Math.round(avg);
       const survival_percent = u.survival_percent ?? 0;
       const estimated_recovery = Math.round(avg_dead * (survival_percent / 100));
+      const avg_spells_cast = stats.length > 0 ? stats.reduce((s, st) => s + st.spells_cast, 0) / stats.length : 0;
+      const avg_spell_damage = stats.length > 0 ? stats.reduce((s, st) => s + st.spell_damage, 0) / stats.length : 0;
+      const avg_spell_kills = stats.length > 0 ? stats.reduce((s, st) => s + st.spell_kills, 0) / stats.length : 0;
+      const avg_spell_heals = stats.length > 0 ? stats.reduce((s, st) => s + st.spell_heals, 0) / stats.length : 0;
+
       return {
         name: u.name,
         original: u.count,
@@ -433,6 +494,10 @@ export function runSimulation(
         avg_critical_misses: Math.round(avg_critical_misses * 10) / 10,
         survival_percent,
         estimated_recovery,
+        avg_spells_cast: Math.round(avg_spells_cast * 10) / 10,
+        avg_spell_damage: Math.round(avg_spell_damage),
+        avg_spell_kills: Math.round(avg_spell_kills * 10) / 10,
+        avg_spell_heals: Math.round(avg_spell_heals * 10) / 10,
       };
     });
   }

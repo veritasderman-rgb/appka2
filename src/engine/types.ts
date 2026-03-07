@@ -113,6 +113,11 @@ export interface UnitResult {
   /** Estimated soldiers that could recover after battle (avg_dead * survival_percent) */
   estimated_recovery: number;
   survival_percent: number;
+  /** Spell statistics (only present for magical units) */
+  avg_spells_cast: number;
+  avg_spell_damage: number;
+  avg_spell_kills: number;
+  avg_spell_heals: number;
 }
 
 export interface ArmyLosses {
@@ -121,11 +126,19 @@ export interface ArmyLosses {
   by_unit: UnitResult[];
 }
 
+export interface ActiveEffectInfo {
+  spellName: string;
+  type: 'buff' | 'cc' | 'debuff';
+  description: string;
+  remainingBK: number;
+}
+
 export interface BKUnitState {
   name: string;
   side: 'army_a' | 'army_b';
   count_before: number;
   count_after: number;
+  activeEffects?: ActiveEffectInfo[];
 }
 
 export interface BKSnapshot {

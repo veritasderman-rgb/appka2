@@ -128,7 +128,7 @@ export function UnitCard({ unit, onClick, onRemove, onCountChange, onSpellToggle
 
         {/* Spell selector for magical army units */}
         {onSpellToggle && 'spells' in unit && unit.spells && unit.spells.length > 0 && (
-          <SpellSelector spells={unit.spells} onToggle={onSpellToggle} />
+          <SpellSelector spells={unit.spells} onToggle={onSpellToggle} unitCount={unit.count} unitType={unit.type} />
         )}
       </div>
     </div>
