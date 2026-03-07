@@ -19,7 +19,7 @@ export const SPELL_SLOTS: Record<'mage' | 'cleric', Record<number, Record<number
   },
 };
 
-export type SpellEffectType = 'damage' | 'heal' | 'buff' | 'cc' | 'utility';
+export type SpellEffectType = 'damage' | 'heal' | 'buff' | 'cc' | 'debuff' | 'utility';
 
 export interface SpellCombatEffect {
   type: SpellEffectType;
@@ -137,7 +137,7 @@ export const SPELL_CATALOG: SpellDefinition[] = [
     level: 1, school: 'okouzlení',
     casterClasses: ['mage'],
     description: 'Tři tvorové utrpí 1k4 psychického zranění a mají nevýhodu k útoku.',
-    combat: { type: 'damage', avgDamage: 7.5, thac0Bonus: 2, durationBK: 1 },
+    combat: { type: 'debuff', avgDamage: 7.5, thac0Bonus: 2, durationBK: 1 },
   },
 
   // ===================== MAGE LEVEL 2 =====================
@@ -654,22 +654,36 @@ export function getSpellById(id: string): SpellDefinition | undefined {
   return SPELL_CATALOG.find(s => s.id === id);
 }
 
-/** Sort spells by combat priority: highest level first, then damage > cc > buff > heal > utility */
-const EFFECT_PRIORITY: Record<SpellEffectType, number> = {
+/** Sort spells by combat priority: highest level first, then by effect type */
+const MAGE_EFFECT_PRIORITY: Record<SpellEffectType, number> = {
   damage: 0,
-  cc: 1,
-  buff: 2,
-  heal: 3,
-  utility: 4,
+  debuff: 1,
+  cc: 2,
+  buff: 3,
+  heal: 4,
+  utility: 5,
 };
 
-export function sortSpellsByCombatPriority(spells: SpellDefinition[]): SpellDefinition[] {
+/** Clerics prioritize support: buff > heal > cc > debuff > damage */
+const CLERIC_EFFECT_PRIORITY: Record<SpellEffectType, number> = {
+  buff: 0,
+  heal: 1,
+  cc: 2,
+  debuff: 3,
+  damage: 4,
+  utility: 5,
+};
+
+export function sortSpellsByCombatPriority(spells: SpellDefinition[], casterClass?: CasterClass): SpellDefinition[] {
+  const isCleric = casterClass === 'cleric' || casterClass === 'battleCleric';
+  const priorityMap = isCleric ? CLERIC_EFFECT_PRIORITY : MAGE_EFFECT_PRIORITY;
+
   return [...spells].sort((a, b) => {
     // Higher level first
     if (b.level !== a.level) return b.level - a.level;
-    // By effect priority
-    const pa = EFFECT_PRIORITY[a.combat.type] ?? 4;
-    const pb = EFFECT_PRIORITY[b.combat.type] ?? 4;
+    // By effect priority (depends on caster class)
+    const pa = priorityMap[a.combat.type] ?? 5;
+    const pb = priorityMap[b.combat.type] ?? 5;
     if (pa !== pb) return pa - pb;
     // Higher damage first
     return (b.combat.avgDamage ?? 0) - (a.combat.avgDamage ?? 0);

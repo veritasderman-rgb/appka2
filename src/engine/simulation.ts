@@ -3,12 +3,14 @@ import type { CombatUnit, SpellModifiers } from './combat';
 import type { BattleConfig, BattleLogEntry, BKSnapshot, SimulationResult, Unit, UnitResult } from './types';
 import {
   type SpellCombatState,
+  type SpellCastResult,
   type ActiveBuff,
   type ActiveCC,
   initSpellState,
   castSpellInBK,
   getBuffModifiers,
   getCCDisableFraction,
+  getDebuffModifiers,
   tickBuffs,
   tickCCs,
 } from './spellCombat';
@@ -97,6 +99,44 @@ function getEnabledSpellIds(unit: Unit): string[] {
   return armyUnit.spells.filter(s => s.enabled).map(s => s.spellId);
 }
 
+/**
+ * Apply spell cast result: damage to enemies, heals/buffs to appropriate allies.
+ * Buff/heal target is determined by log.defender name (set in castSpellInBK).
+ */
+function applySpellResult(
+  result: SpellCastResult,
+  casterWrapper: CombatUnitWithSpells,
+  targetWrapper: CombatUnitWithSpells,
+  allyWrappers: CombatUnitWithSpells[],
+): void {
+  // Damage (from 'damage' or 'debuff' spells) → applied to enemy target
+  if (result.kills > 0) {
+    const actualKills = Math.min(result.kills, targetWrapper.combat.count);
+    targetWrapper.combat.count -= actualKills;
+    targetWrapper.combat.total_losses += actualKills;
+  }
+
+  // Heal → applied to the best ally (determined by log.defender name)
+  if (result.soldiersRestored > 0) {
+    const healTargetName = result.log.defender;
+    const healTarget = allyWrappers.find(a => a.combat.unit.name === healTargetName) ?? casterWrapper;
+    healTarget.combat.count += result.soldiersRestored;
+    healTarget.combat.total_losses -= result.soldiersRestored;
+  }
+
+  // Buff → applied to the nearest ally (determined by log.defender name)
+  if (result.buff) {
+    const buffTargetName = result.log.defender;
+    const buffTarget = allyWrappers.find(a => a.combat.unit.name === buffTargetName) ?? casterWrapper;
+    buffTarget.buffs.push(result.buff);
+  }
+
+  // CC / Debuff → applied to enemy target
+  if (result.cc) {
+    targetWrapper.ccs.push(result.cc);
+  }
+}
+
 function simulateSingleBattle(
   unitsA: Unit[],
   unitsB: Unit[],
@@ -145,57 +185,28 @@ function simulateSingleBattle(
     const aliveB = armyB.filter(u => !isDefeated(u.combat));
 
     // Army A casters cast
+    const allyCombatsA = aliveA.map(u => u.combat);
     for (const unitA of aliveA) {
       if (!unitA.spellState || aliveB.length === 0) continue;
       // Pick a random enemy target
       const target = aliveB[Math.floor(Math.random() * aliveB.length)];
-      const result = castSpellInBK(unitA.combat, unitA.spellState, target.combat, bk);
+      const result = castSpellInBK(unitA.combat, unitA.spellState, target.combat, bk, allyCombatsA);
       if (!result) continue;
 
       allLogs.push(result.log);
-
-      // Apply spell effects
-      if (result.kills > 0) {
-        const actualKills = Math.min(result.kills, target.combat.count);
-        target.combat.count -= actualKills;
-        target.combat.total_losses += actualKills;
-      }
-      if (result.soldiersRestored > 0) {
-        unitA.combat.count += result.soldiersRestored;
-        unitA.combat.total_losses -= result.soldiersRestored;
-      }
-      if (result.buff) {
-        unitA.buffs.push(result.buff);
-      }
-      if (result.cc) {
-        target.ccs.push(result.cc);
-      }
+      applySpellResult(result, unitA, target, aliveA);
     }
 
     // Army B casters cast
+    const allyCombatsB = aliveB.map(u => u.combat);
     for (const unitB of aliveB) {
       if (!unitB.spellState || aliveA.length === 0) continue;
       const target = aliveA[Math.floor(Math.random() * aliveA.length)];
-      const result = castSpellInBK(unitB.combat, unitB.spellState, target.combat, bk);
+      const result = castSpellInBK(unitB.combat, unitB.spellState, target.combat, bk, allyCombatsB);
       if (!result) continue;
 
       allLogs.push(result.log);
-
-      if (result.kills > 0) {
-        const actualKills = Math.min(result.kills, target.combat.count);
-        target.combat.count -= actualKills;
-        target.combat.total_losses += actualKills;
-      }
-      if (result.soldiersRestored > 0) {
-        unitB.combat.count += result.soldiersRestored;
-        unitB.combat.total_losses -= result.soldiersRestored;
-      }
-      if (result.buff) {
-        unitB.buffs.push(result.buff);
-      }
-      if (result.cc) {
-        target.ccs.push(result.cc);
-      }
+      applySpellResult(result, unitB, target, aliveB);
     }
 
     // === RANGED PHASE (BK 1 and 2 only) ===
@@ -252,12 +263,19 @@ function simulateSingleBattle(
       if (isDefeated(wA.combat) || isDefeated(wB.combat)) continue;
 
       // Compute spell modifiers for this matchup
+      const aBuffs = getBuffModifiers(wA.buffs);
+      const aDebuffs = getDebuffModifiers(wA.ccs);
+      const bBuffs = getBuffModifiers(wB.buffs);
+      const bDebuffs = getDebuffModifiers(wB.ccs);
+
       const aMods: SpellModifiers = {
-        ...getBuffModifiers(wA.buffs),
+        acMod: aBuffs.acMod + aDebuffs.acPenalty,
+        thac0Mod: aBuffs.thac0Mod + aDebuffs.thac0Penalty,
         disabledFraction: getCCDisableFraction(wA.ccs),
       };
       const bMods: SpellModifiers = {
-        ...getBuffModifiers(wB.buffs),
+        acMod: bBuffs.acMod + bDebuffs.acPenalty,
+        thac0Mod: bBuffs.thac0Mod + bDebuffs.thac0Penalty,
         disabledFraction: getCCDisableFraction(wB.ccs),
       };
 
