@@ -20,7 +20,7 @@ const SPELL_EFFECT_ICON: Record<string, string> = {
   damage: '🔥',
 };
 
-function parseSpellEffectType(spellEffect?: string, attacker?: string): string {
+function parseSpellEffectType(spellEffect?: string): string {
   if (!spellEffect) {
     // If no explicit effect, it's a damage spell (has kills/damage)
     return 'damage';
@@ -157,7 +157,7 @@ function BKRound({ snapshot }: { snapshot: BKSnapshot }) {
                 🔮 Kouzla
               </div>
               {spellEvents.map((ev, i) => {
-                const effectType = parseSpellEffectType(ev.spellEffect, ev.attacker);
+                const effectType = parseSpellEffectType(ev.spellEffect);
                 const icon = SPELL_EFFECT_ICON[effectType] ?? '🔮';
                 const effectColor = effectType === 'damage' ? 'text-blood-light'
                   : effectType === 'heal' ? 'text-green-400'
