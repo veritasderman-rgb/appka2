@@ -1,9 +1,33 @@
 import { d20, rollDamage, rollDie } from './dice';
 import type { BattleConfig, BattleLogEntry, Terrain, Unit, UnitType } from './types';
-import { TERRAIN_MODIFIERS } from './types';
+import { MAGICAL_UNIT_TYPES, TERRAIN_MODIFIERS } from './types';
 
 /** Unit types considered ranged — penalised by night */
 const RANGED_TYPES: UnitType[] = ['LS', 'TS', 'HR', 'OS', 'SJ'];
+
+/** Check if a unit is flying (airborne — immune to ground melee) */
+export function isFlyingUnit(unit: CombatUnit): boolean {
+  return unit.unit.flying === true;
+}
+
+/** Check if a unit can target flying units (explicitly set, or ranged/magical/flying by type) */
+export function unitCanTargetFlying(unit: Unit): boolean {
+  if (unit.canTargetFlying) return true;
+  if (RANGED_TYPES.includes(unit.type)) return true;
+  if (MAGICAL_UNIT_TYPES.includes(unit.type)) return true;
+  if (unit.flying) return true;
+  return false;
+}
+
+/** Check if a unit is LL-type (aerial ranged — shoots every BK from altitude) */
+export function isAerialRanged(unit: CombatUnit): boolean {
+  return unit.unit.type === 'LL' && unit.unit.flying === true;
+}
+
+/** Check if a unit uses flyby attacks (TL, dragons — melee hit & run, no counterattack) */
+export function isFlybyUnit(unit: CombatUnit): boolean {
+  return unit.unit.flyby === true && unit.unit.flying === true;
+}
 
 export interface CombatUnit {
   unit: Unit;
@@ -120,7 +144,9 @@ export function simulateRangedAttack(
 ): RangedAttackResult {
   const nightTHAC0 = config.timeOfDay === 'night' ? 2 : 0;
   const effectiveCount = Math.min(atk.count, 100);
-  const needed = atk.unit.thac0 + nightTHAC0 - def.unit.ac;
+  // Flying targets get AC bonus vs ground-based ranged unless attacker is also flying
+  const flyingACBonus = (def.unit.flying && !atk.unit.flying) ? (def.unit.flyingACBonus ?? 0) : 0;
+  const needed = atk.unit.thac0 + nightTHAC0 - (def.unit.ac - flyingACBonus);
 
   const roll = d20();
   let hit = false;
@@ -146,7 +172,83 @@ export function simulateRangedAttack(
   const kills = hit ? Math.min(Math.floor(damage / hps), def.count) : 0;
 
   return {
-    log: { bk, attacker: atk.unit.name, defender: def.unit.name, roll, needed, hit, damage, kills, critical, ranged: true },
+    log: { bk, attacker: atk.unit.name, defender: def.unit.name, roll, needed, hit, damage, kills, critical, ranged: true, aerial: atk.unit.flying || def.unit.flying || undefined },
+    kills,
+  };
+}
+
+/**
+ * Simulate a flyby attack (TL / dragons): attacker swoops in, hits once, no counterattack.
+ * +50% damage on BK 1 (Nájezd charge bonus).
+ */
+export function simulateFlybyAttack(
+  atk: CombatUnit,
+  def: CombatUnit,
+  bk: number,
+  config: BattleConfig,
+  atkMods: SpellModifiers = NO_MODS,
+  defMods: SpellModifiers = NO_MODS,
+): { log: BattleLogEntry; kills: number } {
+  const fatiguePenalty = getFatiguePenalty(atk.fatigue_state);
+  const nightTHAC0 = config.timeOfDay === 'night' ? 2 : 0;
+  let effectiveCount = getEffectiveCount(atk, bk, config.largeBattle);
+  if (atkMods.disabledFraction > 0) {
+    effectiveCount = Math.max(1, Math.floor(effectiveCount * (1 - atkMods.disabledFraction)));
+  }
+
+  const effectiveThac0 = atk.unit.thac0 + fatiguePenalty + nightTHAC0 + atkMods.thac0Mod;
+  const effectiveAC = def.unit.ac + defMods.acMod;
+  const needed = effectiveThac0 - effectiveAC;
+
+  const roll = d20();
+  let hit = false;
+  let totalDamage = 0;
+  let critical: 'hit' | 'miss' | undefined;
+
+  if (roll === 1) {
+    critical = 'miss';
+    atk.critical_misses++;
+  } else if (roll === 20) {
+    critical = 'hit';
+    hit = true;
+    atk.critical_hits++;
+    const critMult = rollDie(4);
+    const multiplier = critMult === 1 ? 8 : critMult;
+    totalDamage = rollDamage(atk.unit.dmg) * multiplier * effectiveCount;
+  } else {
+    hit = roll >= needed;
+    if (hit) {
+      totalDamage = rollDamage(atk.unit.dmg) * effectiveCount;
+    }
+  }
+
+  // Nájezd charge bonus: +50% damage on first BK
+  if (bk === 1 && totalDamage > 0) {
+    totalDamage = Math.floor(totalDamage * 1.5);
+  }
+
+  if (fatiguePenalty > 0 && totalDamage > 0) {
+    totalDamage = Math.max(1, totalDamage - fatiguePenalty * effectiveCount);
+  }
+
+  const defHps = def.unit.hp_per_soldier > 0 ? def.unit.hp_per_soldier : 1;
+  const kills = hit ? Math.min(Math.floor(totalDamage / defHps), def.count) : 0;
+
+  return {
+    log: {
+      bk,
+      attacker: atk.unit.name,
+      defender: def.unit.name,
+      roll,
+      needed,
+      hit,
+      damage: totalDamage,
+      kills,
+      critical,
+      fatigue_state: atk.fatigue_state,
+      aerial: true,
+      flyby: true,
+    },
     kills,
   };
 }
@@ -267,8 +369,10 @@ function resolveAttack(
 
   // Effective THAC0 (higher = worse for attacker) + spell buff to attacker's THAC0
   const effectiveThac0 = atk.unit.thac0 + fatiguePenalty + terrainTHAC0 + nightTHAC0 + atkMods.thac0Mod;
+  // Flying defender gets AC bonus vs non-flying melee attacker
+  const flyingACDefBonus = (def.unit.flying && !atk.unit.flying) ? (def.unit.flyingACBonus ?? 0) : 0;
   // Effective AC (lower = better for defender) + spell buff to defender's AC
-  const effectiveAC = def.unit.ac - terrainAC + defMods.acMod;
+  const effectiveAC = def.unit.ac - terrainAC - flyingACDefBonus + defMods.acMod;
 
   // Need to roll: THAC0 - AC
   const needed = effectiveThac0 - effectiveAC;
@@ -358,8 +462,12 @@ function checkMorale(unit: CombatUnit, bk: number, logs: BattleLogEntry[], bkLos
 }
 
 function updateFatigue(unit: CombatUnit) {
-  if (unit.fatigue_remaining > 0) {
-    unit.fatigue_remaining--;
+  // Flying units tire half as fast (they disengage between attacks)
+  const isFly = unit.unit.flying === true;
+  if (!isFly || Math.random() < 0.5) {
+    if (unit.fatigue_remaining > 0) {
+      unit.fatigue_remaining--;
+    }
   }
 
   if (unit.fatigue_remaining > 0) {

@@ -120,7 +120,8 @@ export const allianceUnits: Unit[] = [
     thac0: 14, ac: 4, dmg: '1k8+2', hp_per_soldier: 35,
     initiative: 2, movement_priority: 3, movement_hexes: 3,
     fatigue: 10, morale: 12, survival_percent: 15,
-    count: 50, max_count: 50,
+    count: 50, max_count: 50, range: 2, ammo: 30, attacks_per_bk: 2,
+    flying: true, canTargetFlying: true, flyingACBonus: 3,
     special_abilities: ['Déšť střel'],
   },
   {
@@ -134,7 +135,8 @@ export const allianceUnits: Unit[] = [
     initiative: 3, movement_priority: 5, movement_hexes: 3,
     fatigue: 14, morale: 15, survival_percent: 25,
     count: 20, max_count: 20,
-    special_abilities: ['Nájezd'],
+    flying: true, flyby: true, canTargetFlying: true, flyingACBonus: 2,
+    special_abilities: ['Nájezd', 'Průlet'],
   },
   {
     id: 'tethyr_dr_desmond',
@@ -306,7 +308,8 @@ export const allianceUnits: Unit[] = [
     thac0: 14, ac: 4, dmg: '1k8+2', hp_per_soldier: 35,
     initiative: 2, movement_priority: 3, movement_hexes: 3,
     fatigue: 10, morale: 12, survival_percent: 15,
-    count: 50, max_count: 50,
+    count: 50, max_count: 50, range: 2, ammo: 30, attacks_per_bk: 2,
+    flying: true, canTargetFlying: true, flyingACBonus: 3,
   },
   {
     id: 'cormyr_tl_20',
@@ -319,6 +322,7 @@ export const allianceUnits: Unit[] = [
     initiative: 3, movement_priority: 5, movement_hexes: 3,
     fatigue: 14, morale: 15, survival_percent: 25,
     count: 20, max_count: 20,
+    flying: true, flyby: true, canTargetFlying: true, flyingACBonus: 2,
   },
   {
     id: 'cormyr_dr_50',
@@ -723,6 +727,7 @@ export const allianceUnits: Unit[] = [
     initiative: 1, movement_priority: 1, movement_hexes: 3,
     fatigue: 20, morale: 19, survival_percent: 35,
     count: 7, max_count: 7,
+    flying: true, flyby: true, canTargetFlying: true, flyingACBonus: 2,
     special_abilities: ['Dech mrazu', 'Let', 'Magická odolnost'],
   },
   {
@@ -736,6 +741,7 @@ export const allianceUnits: Unit[] = [
     initiative: 1, movement_priority: 1, movement_hexes: 3,
     fatigue: 18, morale: 18, survival_percent: 30,
     count: 2, max_count: 2,
+    flying: true, flyby: true, canTargetFlying: true, flyingACBonus: 2,
     special_abilities: ['Kyselinový dech', 'Let'],
   },
   {
@@ -749,6 +755,7 @@ export const allianceUnits: Unit[] = [
     initiative: 1, movement_priority: 1, movement_hexes: 3,
     fatigue: 20, morale: 20, survival_percent: 35,
     count: 1, max_count: 1,
+    flying: true, flyby: true, canTargetFlying: true, flyingACBonus: 2,
     special_abilities: ['Ohnivý dech', 'Let', 'Magická odolnost', 'Polymorph'],
   },
 
