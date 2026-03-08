@@ -1,4 +1,4 @@
-import { createCombatUnit, isDefeated, isRangedUnit, simulateBK, simulateRangedAttack } from './combat';
+import { createCombatUnit, isDefeated, isRangedUnit, isFlyingUnit, isAerialRanged, isFlybyUnit, unitCanTargetFlying, simulateBK, simulateRangedAttack, simulateFlybyAttack } from './combat';
 import type { CombatUnit, SpellModifiers } from './combat';
 import type { ActiveEffectInfo, BattleConfig, BattleLogEntry, BKSnapshot, SimulationResult, Unit, UnitResult } from './types';
 import { getSpellById } from '../data/spells';
@@ -54,6 +54,17 @@ interface CombatUnitWithSpells {
   spellStats: SpellStats;
 }
 
+/**
+ * Check if unit A can engage unit B in melee.
+ * Ground units cannot engage flying units unless they can target flying.
+ */
+function canMeleeEngage(a: CombatUnitWithSpells, b: CombatUnitWithSpells): boolean {
+  // If target is flying and attacker can't reach flying → no engagement
+  if (isFlyingUnit(b.combat) && !unitCanTargetFlying(a.combat.unit)) return false;
+  if (isFlyingUnit(a.combat) && !unitCanTargetFlying(b.combat.unit)) return false;
+  return true;
+}
+
 /** Create matchups between armies based on movement priority */
 function createMatchups(
   armyA: CombatUnitWithSpells[],
@@ -73,6 +84,8 @@ function createMatchups(
     for (let i = 0; i < sortedB.length; i++) {
       if (usedB.has(i)) continue;
       if (sortedB[i].combat.count <= 0) continue;
+      // Check if these units can actually engage each other in melee
+      if (!canMeleeEngage(unitA, sortedB[i])) continue;
       const diff = Math.abs(unitA.combat.unit.movement_priority - sortedB[i].combat.unit.movement_priority);
       if (diff < bestPriority) {
         bestPriority = diff;
@@ -88,9 +101,11 @@ function createMatchups(
 
   for (let i = 0; i < sortedB.length; i++) {
     if (!usedB.has(i) && sortedB[i].combat.count > 0) {
-      const strongestA = sortedA.reduce((best, u) =>
-        u.combat.count > best.combat.count ? u : best, sortedA[0]);
-      if (strongestA.combat.count > 0) {
+      // Find a valid opponent that can engage
+      const validA = sortedA.filter(u => u.combat.count > 0 && canMeleeEngage(u, sortedB[i]));
+      if (validA.length > 0) {
+        const strongestA = validA.reduce((best, u) =>
+          u.combat.count > best.combat.count ? u : best, validA[0]);
         pairs.push([strongestA, sortedB[i]]);
       }
     }
@@ -232,11 +247,115 @@ function simulateSingleBattle(
       unitB.spellStats.spell_heals += result.soldiersRestored;
     }
 
+    // === AERIAL RANGED PHASE (LL — Déšť střel, every BK) ===
+    // LL units shoot from altitude every BK, not just BK 1-2
+    {
+      const aerialRangedA = armyA.filter(u => !isDefeated(u.combat) && isAerialRanged(u.combat));
+      const aerialRangedB = armyB.filter(u => !isDefeated(u.combat) && isAerialRanged(u.combat));
+      const aliveTargetsB = armyB.filter(u => !isDefeated(u.combat) && !isFlyingUnit(u.combat));
+      const aliveTargetsA = armyA.filter(u => !isDefeated(u.combat) && !isFlyingUnit(u.combat));
+
+      for (const shooter of aerialRangedA) {
+        // Prefer ground targets, fall back to any alive enemy
+        const targets = aliveTargetsB.length > 0 ? aliveTargetsB : armyB.filter(u => !isDefeated(u.combat));
+        if (targets.length === 0) break;
+        const target = targets[Math.floor(Math.random() * targets.length)];
+        const attacksPerBK = shooter.combat.unit.attacks_per_bk ?? 1;
+        for (let shot = 0; shot < attacksPerBK; shot++) {
+          if (target.combat.count <= 0) break;
+          const result = simulateRangedAttack(shooter.combat, target.combat, bk, config);
+          result.log.aerial = true;
+          allLogs.push(result.log);
+          target.combat.count -= result.kills;
+          target.combat.total_losses += result.kills;
+        }
+        if (shooter.combat.ammo_remaining !== undefined) {
+          shooter.combat.ammo_remaining = Math.max(0, shooter.combat.ammo_remaining - 1);
+        }
+      }
+
+      for (const shooter of aerialRangedB) {
+        const targets = aliveTargetsA.length > 0 ? aliveTargetsA : armyA.filter(u => !isDefeated(u.combat));
+        if (targets.length === 0) break;
+        const target = targets[Math.floor(Math.random() * targets.length)];
+        const attacksPerBK = shooter.combat.unit.attacks_per_bk ?? 1;
+        for (let shot = 0; shot < attacksPerBK; shot++) {
+          if (target.combat.count <= 0) break;
+          const result = simulateRangedAttack(shooter.combat, target.combat, bk, config);
+          result.log.aerial = true;
+          allLogs.push(result.log);
+          target.combat.count -= result.kills;
+          target.combat.total_losses += result.kills;
+        }
+        if (shooter.combat.ammo_remaining !== undefined) {
+          shooter.combat.ammo_remaining = Math.max(0, shooter.combat.ammo_remaining - 1);
+        }
+      }
+    }
+
+    // === FLYBY PHASE (TL / dragons — Průlet/Nájezd) ===
+    // Flyby units swoop in, strike once, no counterattack
+    {
+      const flybyA = armyA.filter(u => !isDefeated(u.combat) && isFlybyUnit(u.combat));
+      const flybyB = armyB.filter(u => !isDefeated(u.combat) && isFlybyUnit(u.combat));
+
+      for (const swooper of flybyA) {
+        const targets = armyB.filter(u => !isDefeated(u.combat));
+        if (targets.length === 0) break;
+        // Prioritize low-morale or ranged targets
+        const target = targets.sort((a, b) => {
+          const aScore = (isRangedUnit(a.combat) ? -10 : 0) + a.combat.unit.morale;
+          const bScore = (isRangedUnit(b.combat) ? -10 : 0) + b.combat.unit.morale;
+          return aScore - bScore;
+        })[0];
+
+        const aMods: SpellModifiers = {
+          acMod: getBuffModifiers(swooper.buffs).acMod + getDebuffModifiers(swooper.ccs).acPenalty,
+          thac0Mod: getBuffModifiers(swooper.buffs).thac0Mod + getDebuffModifiers(swooper.ccs).thac0Penalty,
+          disabledFraction: getCCDisableFraction(swooper.ccs),
+        };
+        const dMods: SpellModifiers = {
+          acMod: getBuffModifiers(target.buffs).acMod + getDebuffModifiers(target.ccs).acPenalty,
+          thac0Mod: 0, disabledFraction: 0,
+        };
+
+        const result = simulateFlybyAttack(swooper.combat, target.combat, bk, config, aMods, dMods);
+        allLogs.push(result.log);
+        target.combat.count -= result.kills;
+        target.combat.total_losses += result.kills;
+      }
+
+      for (const swooper of flybyB) {
+        const targets = armyA.filter(u => !isDefeated(u.combat));
+        if (targets.length === 0) break;
+        const target = targets.sort((a, b) => {
+          const aScore = (isRangedUnit(a.combat) ? -10 : 0) + a.combat.unit.morale;
+          const bScore = (isRangedUnit(b.combat) ? -10 : 0) + b.combat.unit.morale;
+          return aScore - bScore;
+        })[0];
+
+        const aMods: SpellModifiers = {
+          acMod: getBuffModifiers(swooper.buffs).acMod + getDebuffModifiers(swooper.ccs).acPenalty,
+          thac0Mod: getBuffModifiers(swooper.buffs).thac0Mod + getDebuffModifiers(swooper.ccs).thac0Penalty,
+          disabledFraction: getCCDisableFraction(swooper.ccs),
+        };
+        const dMods: SpellModifiers = {
+          acMod: getBuffModifiers(target.buffs).acMod + getDebuffModifiers(target.ccs).acPenalty,
+          thac0Mod: 0, disabledFraction: 0,
+        };
+
+        const result = simulateFlybyAttack(swooper.combat, target.combat, bk, config, aMods, dMods);
+        allLogs.push(result.log);
+        target.combat.count -= result.kills;
+        target.combat.total_losses += result.kills;
+      }
+    }
+
     // === RANGED PHASE (BK 1 and 2 only) ===
-    // Ranged units with ammo fire before melee engagement
+    // Ground ranged units with ammo fire before melee engagement (excludes aerial ranged LL)
     if (bk <= 2) {
-      const rangedA = armyA.filter(u => !isDefeated(u.combat) && isRangedUnit(u.combat));
-      const rangedB = armyB.filter(u => !isDefeated(u.combat) && isRangedUnit(u.combat));
+      const rangedA = armyA.filter(u => !isDefeated(u.combat) && isRangedUnit(u.combat) && !isAerialRanged(u.combat));
+      const rangedB = armyB.filter(u => !isDefeated(u.combat) && isRangedUnit(u.combat) && !isAerialRanged(u.combat));
       const aliveMeleeB = armyB.filter(u => !isDefeated(u.combat));
       const aliveMeleeA = armyA.filter(u => !isDefeated(u.combat));
 
@@ -274,9 +393,12 @@ function simulateSingleBattle(
     }
 
     // === MELEE PHASE ===
-    // In BK 1-2, ranged units are busy in the ranged phase — exclude them from melee
+    // Exclude: ranged in BK 1-2, aerial ranged (LL — always shoots), flyby units (TL — own phase)
     const meleeFilter = (u: CombatUnitWithSpells) =>
-      !isDefeated(u.combat) && (bk > 2 || !isRangedUnit(u.combat));
+      !isDefeated(u.combat) &&
+      (bk > 2 || !isRangedUnit(u.combat)) &&
+      !isAerialRanged(u.combat) &&
+      !isFlybyUnit(u.combat);
     const matchups = createMatchups(
       armyA.filter(meleeFilter),
       armyB.filter(meleeFilter)
@@ -563,6 +685,30 @@ export function runSimulation(
   // High variance in duration
   if (stddevBK >= 5 && n >= 10) {
     keyFactors.push(`Velká variabilita délky bitev (±${stddevBK} BK) — výsledek závisí na náhodě.`);
+  }
+
+  // Aerial superiority analysis
+  const aFlying = unitsA.filter(u => u.flying);
+  const bFlying = unitsB.filter(u => u.flying);
+  const aAntiAir = unitsA.filter(u => unitCanTargetFlying(u) && !u.flying);
+  const bAntiAir = unitsB.filter(u => unitCanTargetFlying(u) && !u.flying);
+
+  if (aFlying.length > 0 || bFlying.length > 0) {
+    if (aFlying.length > 0 && bFlying.length === 0) {
+      if (bAntiAir.length === 0) {
+        keyFactors.push(`Spojenci mají vzdušnou nadvládu — nepřátelé nemají jednotky schopné zasáhnout letky.`);
+      } else {
+        keyFactors.push(`Spojenci mají ${aFlying.length} leteck${aFlying.length === 1 ? 'ou jednotku' : 'é jednotky'}, nepřátelé se brání ${bAntiAir.length} střeleck${bAntiAir.length === 1 ? 'ou' : 'ými'} jednotk${bAntiAir.length === 1 ? 'ou' : 'ami'}.`);
+      }
+    } else if (bFlying.length > 0 && aFlying.length === 0) {
+      if (aAntiAir.length === 0) {
+        keyFactors.push(`Nepřátelé mají vzdušnou nadvládu — Spojenci nemají jednotky schopné zasáhnout letky.`);
+      } else {
+        keyFactors.push(`Nepřátelé mají ${bFlying.length} leteck${bFlying.length === 1 ? 'ou jednotku' : 'é jednotky'}, Spojenci se brání ${aAntiAir.length} střeleck${aAntiAir.length === 1 ? 'ou' : 'ými'} jednotk${aAntiAir.length === 1 ? 'ou' : 'ami'}.`);
+      }
+    } else {
+      keyFactors.push(`Vzdušný souboj: Spojenci ${aFlying.length} vs Nepřátelé ${bFlying.length} leteckých jednotek.`);
+    }
   }
 
   const simulationResult: SimulationResult = {

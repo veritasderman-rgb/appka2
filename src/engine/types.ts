@@ -76,10 +76,23 @@ export interface Unit {
   // Special
   special_abilities?: string[];
   notes?: string;
+
+  // Aerial
+  /** Unit is airborne — ground melee cannot target it */
+  flying?: boolean;
+  /** Flyby attack — attacks without allowing counterattack */
+  flyby?: boolean;
+  /** Can target flying units (ranged, magical, or flying units) */
+  canTargetFlying?: boolean;
+  /** AC bonus vs ground-based ranged attacks (harder to hit from ground) */
+  flyingACBonus?: number;
 }
 
 /** Unit types that can cast spells */
 export const MAGICAL_UNIT_TYPES: UnitType[] = ['MG', 'BM', 'KN', 'DR'];
+
+/** Unit types that are flying */
+export const FLYING_UNIT_TYPES: UnitType[] = ['LL', 'TL'];
 
 export type Terrain = 'open' | 'forest' | 'hills' | 'walls' | 'ford';
 export type TimeOfDay = 'day' | 'night';
@@ -194,6 +207,10 @@ export interface BattleLogEntry {
   ranged?: boolean;
   /** Spell effect description (e.g. "heal:5", "buff:0.75", "cc:0.15") */
   spellEffect?: string;
+  /** true when this is an aerial attack (flyby, rain of arrows) */
+  aerial?: boolean;
+  /** true when attacker uses flyby (no counterattack allowed) */
+  flyby?: boolean;
 }
 
 export const DEFAULT_CONFIG: BattleConfig = {

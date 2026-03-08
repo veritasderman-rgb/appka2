@@ -95,9 +95,14 @@ export function UnitCard({ unit, onClick, onRemove, onCountChange, onSpellToggle
           </div>
         )}
 
-        {unit.special_abilities && unit.special_abilities.length > 0 && (
+        {(unit.special_abilities?.length || unit.flying) && (
           <div className="flex flex-wrap gap-1 mt-2">
-            {unit.special_abilities.map(a => (
+            {unit.flying && (
+              <span className="text-xs bg-sky-900/30 px-2 py-0.5 rounded text-sky-300 border border-sky-700/50">
+                🦅 Letecká {unit.flyby ? '(Průlet)' : '(Déšť střel)'}
+              </span>
+            )}
+            {unit.special_abilities?.map(a => (
               <span key={a} className="text-xs bg-dark-surface px-2 py-0.5 rounded text-gold-light border border-dark-border">
                 {a}
               </span>

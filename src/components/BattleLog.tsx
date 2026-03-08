@@ -106,8 +106,10 @@ function BKRound({ snapshot }: { snapshot: BKSnapshot }) {
   // Separate spell events from combat events
   const spellEvents = snapshot.events.filter(e => e.attacker.includes('['));
   const combatEvents = snapshot.events.filter(e => !e.attacker.includes('[') && !e.morale_check);
-  const rangedEvents = combatEvents.filter(e => e.ranged);
-  const meleeEvents = combatEvents.filter(e => !e.ranged);
+  const aerialEvents = combatEvents.filter(e => e.aerial);
+  const groundCombatEvents = combatEvents.filter(e => !e.aerial);
+  const rangedEvents = groundCombatEvents.filter(e => e.ranged);
+  const meleeEvents = groundCombatEvents.filter(e => !e.ranged);
   const moraleEvents = snapshot.events.filter(e => !!e.morale_check);
 
   // Count active effects for summary
@@ -126,6 +128,7 @@ function BKRound({ snapshot }: { snapshot: BKSnapshot }) {
           <span className="text-gold font-bold text-sm">BK {snapshot.bk}</span>
           <span className="text-xs text-parchment-dark">
             {spellEvents.length > 0 && `🔮 ${spellEvents.length} · `}
+            {aerialEvents.length > 0 && `🦅 ${aerialEvents.length} · `}
             {rangedEvents.length > 0 && `🏹 ${rangedEvents.length} · `}
             {meleeEvents.length > 0 && `⚔ ${meleeEvents.length}`}
             {spellEvents.length === 0 && combatEvents.length === 0 && '—'}
@@ -185,13 +188,78 @@ function BKRound({ snapshot }: { snapshot: BKSnapshot }) {
             </div>
           )}
 
-          {/* Attack events */}
-          {combatEvents.length > 0 && (
+          {/* Aerial events */}
+          {aerialEvents.length > 0 && (
+            <div className="px-4 py-3 space-y-2">
+              <div className="text-xs text-sky-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                🦅 Letecké útoky
+              </div>
+              {aerialEvents.map((ev, i) => (
+                <div key={i} className="text-sm">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={ev.hit ? 'text-parchment font-semibold' : 'text-parchment-dark'}>
+                      {ev.flyby ? '🦅💨' : '🦅🏹'} {ev.attacker}
+                    </span>
+                    <span className="text-parchment-dark">→</span>
+                    <span className={ev.hit ? 'text-parchment font-semibold' : 'text-parchment-dark'}>
+                      {ev.defender}
+                    </span>
+                    {ev.flyby && (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-sky-900/30 text-sky-300 border border-sky-700/50">
+                        Průlet
+                      </span>
+                    )}
+                    {!ev.flyby && (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-sky-900/30 text-sky-300 border border-sky-700/50">
+                        Déšť střel
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 mt-0.5 ml-4 flex-wrap">
+                    <span className="text-xs text-parchment-dark">
+                      Hod: <span className="text-parchment font-mono">{ev.roll}</span>
+                      {' / Potřeba: '}
+                      <span className="text-parchment font-mono">{ev.needed}</span>
+                    </span>
+                    {ev.critical === 'hit' ? (
+                      <span className="text-xs font-bold text-yellow-300 bg-yellow-900/30 px-2 py-0.5 rounded">
+                        KRITICKÝ ZÁSAH
+                      </span>
+                    ) : ev.critical === 'miss' ? (
+                      <span className="text-xs font-bold text-parchment-dark bg-dark-border px-2 py-0.5 rounded">
+                        KRITICKÉ MINUTÍ
+                      </span>
+                    ) : ev.hit ? (
+                      <span className="text-xs font-bold text-sky-300">ZÁSAH</span>
+                    ) : (
+                      <span className="text-xs text-parchment-dark">minutí</span>
+                    )}
+                    {ev.hit && (
+                      <>
+                        <span className="text-xs text-parchment-dark">
+                          Dmg: <span className="text-parchment font-mono">{ev.damage}</span>
+                        </span>
+                        <span className={`text-xs font-bold ${ev.kills > 0 ? 'text-blood-light' : 'text-parchment-dark'}`}>
+                          Padlo: {ev.kills} vojáků
+                        </span>
+                      </>
+                    )}
+                    {ev.flyby && (
+                      <span className="text-xs text-sky-400 opacity-70">bez protiútoku</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Ground attack events */}
+          {groundCombatEvents.length > 0 && (
             <div className="px-4 py-3 space-y-2">
               <div className="text-xs text-parchment-dark uppercase tracking-wider mb-2">
                 {rangedEvents.length > 0 && meleeEvents.length > 0 ? 'Střelba & Melee' : rangedEvents.length > 0 ? 'Střelba (pre-kolo)' : 'Melee'}
               </div>
-              {combatEvents.map((ev, i) => (
+              {groundCombatEvents.map((ev, i) => (
                 <div key={i} className="text-sm">
                   <div className="flex items-center gap-2 flex-wrap">
                     {/* Attacker name + arrow */}
