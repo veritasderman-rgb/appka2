@@ -99,7 +99,7 @@ export function SimulationResults({ result, onBack }: SimulationResultsProps) {
                   <Cell key={i} fill={entry.color} />
                 ))}
               </Pie>
-              <Tooltip formatter={(v) => `${v}%`} />
+              <Tooltip formatter={(v) => `${String(v)}%`} />
               <Legend />
             </PieChart>
           </ResponsiveContainer>

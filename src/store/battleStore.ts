@@ -68,7 +68,7 @@ interface BattleState {
 function loadCustomUnits(faction: 'alliance' | 'enemy'): Unit[] {
   try {
     const data = localStorage.getItem(`custom_${faction}_units`);
-    return data ? JSON.parse(data) : [];
+    return data ? (JSON.parse(data) as Unit[]) : [];
   } catch {
     return [];
   }
@@ -128,7 +128,7 @@ export const useBattleStore = create<BattleState>((set, get) => ({
   toggleSpell: (faction, instanceId, spellId) => {
     const key = faction === 'alliance' ? 'armyA' : 'armyB';
     set(s => ({
-      [key]: (s[key] as ArmyUnit[]).map(u =>
+      [key]: s[key].map(u =>
         u.instanceId === instanceId && u.spells
           ? { ...u, spells: u.spells.map(sp => sp.spellId === spellId ? { ...sp, enabled: !sp.enabled } : sp) }
           : u

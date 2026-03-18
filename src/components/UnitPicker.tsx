@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import type { Unit, UnitType } from '../engine/types';
+import type { Unit } from '../engine/types';
 import { UNIT_TYPE_LABELS } from '../engine/types';
 import { getOrigins } from '../data/alliance_units';
 import { UnitCard } from './UnitCard';
@@ -61,7 +61,7 @@ export function UnitPicker({ units, onAdd, title, side }: UnitPickerProps) {
         >
           <option value="all">Všechny typy</option>
           {types.map(t => (
-            <option key={t} value={t}>{UNIT_TYPE_LABELS[t as UnitType] || t}</option>
+            <option key={t} value={t}>{UNIT_TYPE_LABELS[t] || t}</option>
           ))}
         </select>
       </div>
