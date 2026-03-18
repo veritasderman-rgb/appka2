@@ -23,7 +23,7 @@ function LoadingFallback() {
 }
 
 function App() {
-  const { screen, setScreen, result, hexResult } = useBattleStore();
+  const { screen, setScreen, result, simulationHistory, setResult, hexResult } = useBattleStore();
 
   return (
     <div className="min-h-screen bg-dark-bg flex flex-col">
@@ -95,6 +95,8 @@ function App() {
           {screen === 'results' && result && (
             <SimulationResults
               result={result}
+              history={simulationHistory}
+              onSelectHistory={setResult}
               onBack={() => setScreen('builder')}
             />
           )}

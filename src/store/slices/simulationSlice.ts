@@ -6,11 +6,14 @@ import type { HexBattleResult } from '../../engine/hexBattle';
 import type { BattleStore } from '../types';
 import type { SimulationRequest } from '../../workers/simulationWorker';
 
+const MAX_HISTORY = 10;
+
 export interface SimulationSlice {
   config: BattleConfig;
   setConfig: (c: Partial<BattleConfig>) => void;
 
   result: SimulationResult | null;
+  simulationHistory: SimulationResult[];
   isSimulating: boolean;
   simulationProgress: number;
 
@@ -19,6 +22,7 @@ export interface SimulationSlice {
 
   runBattle: () => void;
   runHexBattleAction: () => void;
+  setResult: (r: SimulationResult) => void;
 }
 
 /** Response message from simulationWorker */
@@ -32,11 +36,14 @@ export const createSimulationSlice: StateCreator<BattleStore, [], [], Simulation
   setConfig: (c) => set(s => ({ config: { ...s.config, ...c } })),
 
   result: null,
+  simulationHistory: [],
   isSimulating: false,
   simulationProgress: 0,
 
   hexResult: null,
   isHexSimulating: false,
+
+  setResult: (r) => set({ result: r }),
 
   runHexBattleAction: () => {
     const { armyA, armyB, config } = get();
@@ -67,7 +74,8 @@ export const createSimulationSlice: StateCreator<BattleStore, [], [], Simulation
       if (msg.type === 'progress') {
         set({ simulationProgress: msg.progress });
       } else if (msg.type === 'result') {
-        set({ result: msg.result, isSimulating: false, simulationProgress: 100, screen: 'results' });
+        const history = [msg.result, ...get().simulationHistory].slice(0, MAX_HISTORY);
+        set({ result: msg.result, simulationHistory: history, isSimulating: false, simulationProgress: 100, screen: 'results' });
         worker.terminate();
       } else if (msg.type === 'error') {
         // eslint-disable-next-line no-console

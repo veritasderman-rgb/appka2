@@ -3,6 +3,7 @@ import { allianceUnits, sampleEnemyUnits } from '../data/alliance_units';
 import { UnitPicker } from './UnitPicker';
 import { ArmyPanel } from './ArmyPanel';
 import { BattleConfigPanel } from './BattleConfig';
+import { QuoteDisplay } from './QuoteDisplay';
 import { useState } from 'react';
 
 export function ArmyBuilder() {
@@ -156,6 +157,9 @@ export function ArmyBuilder() {
           Vyber alespoň jednu jednotku na každé straně
         </p>
       )}
+
+      {/* Citát z Faerunu */}
+      <QuoteDisplay className="mt-1" />
     </div>
   );
 }
