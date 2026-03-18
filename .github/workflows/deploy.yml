@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, claude/tapir-simulator-refactor-vzlJJ]
   workflow_dispatch:
 
 permissions:
@@ -27,6 +27,8 @@ jobs:
       - run: npm run build
         env:
           BASE_PATH: /appka2/
+      - name: Add .nojekyll
+        run: touch dist/.nojekyll
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
