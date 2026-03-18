@@ -3,8 +3,46 @@ import type { SimulationResult } from '../engine/types';
 import { BattleLog } from './BattleLog';
 import { SpellTimeline } from './SpellTimeline';
 
+function exportJSON(result: SimulationResult) {
+  const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `battle-result-${Date.now()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportCSV(result: SimulationResult) {
+  const rows: string[][] = [
+    ['strana', 'jednotka', 'původní', 'průměr_přeživších', 'průměr_mrtvých', 'zničena_%', 'morálka_%'],
+    ...result.avg_losses.army_a.by_unit.map(u => [
+      'Aliance', u.name, String(u.original),
+      u.avg_remaining.toFixed(1), u.avg_dead.toFixed(1),
+      (u.destruction_rate * 100).toFixed(1),
+      (u.morale_failure_rate * 100).toFixed(1),
+    ]),
+    ...result.avg_losses.army_b.by_unit.map(u => [
+      'Nepřátelé', u.name, String(u.original),
+      u.avg_remaining.toFixed(1), u.avg_dead.toFixed(1),
+      (u.destruction_rate * 100).toFixed(1),
+      (u.morale_failure_rate * 100).toFixed(1),
+    ]),
+  ];
+  const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `battle-result-${Date.now()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 interface SimulationResultsProps {
   result: SimulationResult;
+  history?: SimulationResult[];
+  onSelectHistory?: (r: SimulationResult) => void;
   onBack: () => void;
 }
 
@@ -14,7 +52,7 @@ const COLORS = {
   draw: '#a8b0b8',
 };
 
-export function SimulationResults({ result, onBack }: SimulationResultsProps) {
+export function SimulationResults({ result, history, onSelectHistory, onBack }: SimulationResultsProps) {
   // Pie chart data
   const pieData = [
     { name: 'Spojenci', value: result.probability.army_a_win, color: COLORS.alliance },
@@ -60,15 +98,31 @@ export function SimulationResults({ result, onBack }: SimulationResultsProps) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <button
           onClick={onBack}
           className="text-sm text-parchment-dark hover:text-parchment border border-dark-border rounded px-3 py-1.5"
         >
           Zpět na sestavení
         </button>
-        <div className="text-sm text-parchment-dark">
-          {result.total_simulations} simulací · {result.avg_duration_bk} BK průměrně
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => exportJSON(result)}
+            className="text-xs text-parchment-dark hover:text-parchment border border-dark-border rounded px-2 py-1"
+            title="Exportovat výsledek jako JSON"
+          >
+            ↓ JSON
+          </button>
+          <button
+            onClick={() => exportCSV(result)}
+            className="text-xs text-parchment-dark hover:text-parchment border border-dark-border rounded px-2 py-1"
+            title="Exportovat výsledek jako CSV"
+          >
+            ↓ CSV
+          </button>
+          <div className="text-sm text-parchment-dark">
+            {result.total_simulations} simulací · {result.avg_duration_bk} BK průměrně
+          </div>
         </div>
       </div>
 
@@ -99,7 +153,7 @@ export function SimulationResults({ result, onBack }: SimulationResultsProps) {
                   <Cell key={i} fill={entry.color} />
                 ))}
               </Pie>
-              <Tooltip formatter={(v) => `${v}%`} />
+              <Tooltip formatter={(v) => `${String(v)}%`} />
               <Legend />
             </PieChart>
           </ResponsiveContainer>
@@ -337,6 +391,45 @@ export function SimulationResults({ result, onBack }: SimulationResultsProps) {
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {/* Simulation history */}
+      {history && history.length > 1 && onSelectHistory && (
+        <div className="bg-dark-card border border-dark-border rounded-lg p-4">
+          <h3 className="text-gold font-bold mb-3">Historie simulací</h3>
+          <div className="space-y-1">
+            {history.map((h, i) => {
+              const isCurrent = h === result;
+              const winner = h.probability.army_a_win > h.probability.army_b_win
+                ? `Spojenci ${h.probability.army_a_win}%`
+                : h.probability.army_b_win > h.probability.army_a_win
+                  ? `Nepřátelé ${h.probability.army_b_win}%`
+                  : `Remíza ${h.probability.draw}%`;
+              const winColor = h.probability.army_a_win > h.probability.army_b_win
+                ? 'text-alliance-light'
+                : h.probability.army_b_win > h.probability.army_a_win
+                  ? 'text-enemy-light'
+                  : 'text-silver';
+              return (
+                <button
+                  key={i}
+                  onClick={() => { if (!isCurrent) onSelectHistory(h); }}
+                  className={`w-full text-left px-3 py-2 rounded text-sm flex items-center justify-between gap-2 transition-colors ${
+                    isCurrent
+                      ? 'bg-dark-surface border border-gold/40 cursor-default'
+                      : 'hover:bg-dark-surface border border-transparent'
+                  }`}
+                >
+                  <span className="text-parchment-dark">
+                    #{history.length - i} · {h.total_simulations}× · {h.avg_duration_bk} BK
+                    {isCurrent && <span className="ml-2 text-gold text-xs">(aktuální)</span>}
+                  </span>
+                  <span className={`font-bold ${winColor}`}>{winner}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

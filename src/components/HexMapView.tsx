@@ -99,7 +99,7 @@ function HexGrid({ snapshot, showVectors }: GridProps) {
     processVectors(snapshot.vectorsA, 'a');
     processVectors(snapshot.vectorsB, 'b');
     return lines;
-  }, [snapshot.vectorsA, snapshot.vectorsB, unitById, showVectors]);
+  }, [snapshot, unitById, showVectors]);
 
   // Engagement markers (sword icon at midpoint)
   const engagementMarkers = useMemo(() => {

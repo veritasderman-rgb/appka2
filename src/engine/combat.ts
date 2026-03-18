@@ -56,7 +56,8 @@ export function getCommanderBonuses(unit: Unit): { initiativeBonus: number; thac
   if (!cmd) return { initiativeBonus: 0, thac0Bonus: 0 };
   const initiativeBonus = Math.floor(cmd.level / 5);
   const starTotal = cmd.stars ? Object.values(cmd.stars).reduce((s, v) => s + v, 0) : 0;
-  const thac0Bonus = -Math.floor(starTotal / 3); // negative = better attack
+  const starFloor = Math.floor(starTotal / 3);
+  const thac0Bonus = starFloor > 0 ? -starFloor : 0; // negative = better attack
   return { initiativeBonus, thac0Bonus };
 }
 

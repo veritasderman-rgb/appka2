@@ -539,7 +539,7 @@ export function runSimulation(
   // Aggregate
   const wins = { army_a: 0, army_b: 0, draw: 0 };
   let totalBK = 0;
-  const bkDist: number[] = new Array(config.maxBK + 1).fill(0);
+  const bkDist: number[] = (new Array(config.maxBK + 1) as number[]).fill(0);
 
   const aRemaining: Map<string, number[]> = new Map();
   const bRemaining: Map<string, number[]> = new Map();
