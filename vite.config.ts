@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  base: process.env['BASE_PATH'] ?? '/appka/',
+  base: process.env['BASE_PATH'] ?? '/appka2/',
   build: {
     rollupOptions: {
       output: {
