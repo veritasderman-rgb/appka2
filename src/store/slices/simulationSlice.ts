@@ -1,10 +1,10 @@
 import type { StateCreator } from 'zustand';
 import type { BattleConfig, SimulationResult } from '../../engine/types';
 import { DEFAULT_CONFIG } from '../../engine/types';
-import { runSimulation } from '../../engine/simulation';
 import { runHexBattle } from '../../engine/hexBattle';
 import type { HexBattleResult } from '../../engine/hexBattle';
 import type { BattleStore } from '../types';
+import type { SimulationRequest } from '../../workers/simulationWorker';
 
 export interface SimulationSlice {
   config: BattleConfig;
@@ -20,6 +20,12 @@ export interface SimulationSlice {
   runBattle: () => void;
   runHexBattleAction: () => void;
 }
+
+/** Response message from simulationWorker */
+type WorkerMessage =
+  | { type: 'progress'; progress: number }
+  | { type: 'result'; result: SimulationResult }
+  | { type: 'error'; message: string };
 
 export const createSimulationSlice: StateCreator<BattleStore, [], [], SimulationSlice> = (set, get) => ({
   config: DEFAULT_CONFIG,
@@ -48,11 +54,34 @@ export const createSimulationSlice: StateCreator<BattleStore, [], [], Simulation
 
     set({ isSimulating: true, simulationProgress: 0 });
 
-    setTimeout(() => {
-      const result = runSimulation(armyA, armyB, config, (p) => {
-        set({ simulationProgress: p });
-      });
-      set({ result, isSimulating: false, simulationProgress: 100, screen: 'results' });
-    }, 50);
+    const worker = new Worker(
+      new URL('../../workers/simulationWorker.ts', import.meta.url),
+      { type: 'module' },
+    );
+
+    const request: SimulationRequest = { unitsA: armyA, unitsB: armyB, config };
+    worker.postMessage(request);
+
+    worker.addEventListener('message', (event: MessageEvent<WorkerMessage>) => {
+      const msg = event.data;
+      if (msg.type === 'progress') {
+        set({ simulationProgress: msg.progress });
+      } else if (msg.type === 'result') {
+        set({ result: msg.result, isSimulating: false, simulationProgress: 100, screen: 'results' });
+        worker.terminate();
+      } else if (msg.type === 'error') {
+        // eslint-disable-next-line no-console
+        console.error('[simulationWorker] Chyba simulace:', msg.message);
+        set({ isSimulating: false, simulationProgress: 0 });
+        worker.terminate();
+      }
+    });
+
+    worker.addEventListener('error', (err) => {
+      // eslint-disable-next-line no-console
+      console.error('[simulationWorker] Worker error:', err.message);
+      set({ isSimulating: false, simulationProgress: 0 });
+      worker.terminate();
+    });
   },
 });

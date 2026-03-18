@@ -5,4 +5,15 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   base: process.env['BASE_PATH'] ?? '/appka/',
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-recharts': ['recharts'],
+          'vendor-zustand': ['zustand'],
+          'vendor-zod': ['zod'],
+        },
+      },
+    },
+  },
 })

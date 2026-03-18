@@ -1,9 +1,26 @@
+import { lazy, Suspense } from 'react';
 import './index.css';
 import { useBattleStore } from './store/battleStore';
 import { ArmyBuilder } from './components/ArmyBuilder';
-import { SimulationResults } from './components/SimulationResults';
-import { UnitEditor } from './components/UnitEditor';
-import { HexMapView } from './components/HexMapView';
+
+// Lazy load heavy components to reduce initial bundle
+const SimulationResults = lazy(() =>
+  import('./components/SimulationResults').then(m => ({ default: m.SimulationResults }))
+);
+const UnitEditor = lazy(() =>
+  import('./components/UnitEditor').then(m => ({ default: m.UnitEditor }))
+);
+const HexMapView = lazy(() =>
+  import('./components/HexMapView').then(m => ({ default: m.HexMapView }))
+);
+
+function LoadingFallback() {
+  return (
+    <div className="flex items-center justify-center h-64">
+      <p className="text-parchment-dark text-sm">Načítám...</p>
+    </div>
+  );
+}
 
 function App() {
   const { screen, setScreen, result, hexResult } = useBattleStore();
@@ -72,22 +89,24 @@ function App() {
 
       {/* Main content */}
       <main className="flex-1 p-4 max-w-screen-2xl mx-auto w-full">
-        {screen === 'builder' && <ArmyBuilder />}
-        {screen === 'units' && <UnitEditor />}
-        {screen === 'results' && result && (
-          <SimulationResults
-            result={result}
-            onBack={() => setScreen('builder')}
-          />
-        )}
-        {screen === 'hexmap' && hexResult && (
-          <HexMapView
-            result={hexResult}
-            armyALabel="Aliance"
-            armyBLabel="Nepřátelé"
-            onBack={() => setScreen('builder')}
-          />
-        )}
+        <Suspense fallback={<LoadingFallback />}>
+          {screen === 'builder' && <ArmyBuilder />}
+          {screen === 'units' && <UnitEditor />}
+          {screen === 'results' && result && (
+            <SimulationResults
+              result={result}
+              onBack={() => setScreen('builder')}
+            />
+          )}
+          {screen === 'hexmap' && hexResult && (
+            <HexMapView
+              result={hexResult}
+              armyALabel="Aliance"
+              armyBLabel="Nepřátelé"
+              onBack={() => setScreen('builder')}
+            />
+          )}
+        </Suspense>
       </main>
 
       {/* Footer */}
