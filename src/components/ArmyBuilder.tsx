@@ -25,6 +25,9 @@ export function ArmyBuilder() {
 
   return (
     <div className="flex flex-col h-full gap-4">
+      {/* Citát z Faerunu */}
+      <QuoteDisplay />
+
       {/* Config */}
       <BattleConfigPanel config={config} onChange={setConfig} />
 
@@ -178,8 +181,6 @@ export function ArmyBuilder() {
         </p>
       )}
 
-      {/* Citát z Faerunu */}
-      <QuoteDisplay className="mt-1" />
     </div>
   );
 }
