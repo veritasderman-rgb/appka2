@@ -112,48 +112,68 @@ export function ArmyBuilder() {
       </div>
 
       {/* Run buttons */}
-      <div className="flex justify-center gap-3 py-2 flex-wrap">
-        <button
-          onClick={runBattle}
-          disabled={!canSimulate}
-          className={`px-8 py-3 rounded-lg font-bold text-lg transition-all ${
-            canSimulate
-              ? 'bg-gold text-dark-bg hover:bg-gold-light shadow-lg shadow-gold/20'
-              : 'bg-dark-surface text-parchment-dark border border-dark-border cursor-not-allowed'
-          }`}
-        >
-          {isSimulating ? (
-            <span className="flex items-center gap-2">
-              Simuluji... {simulationProgress}%
-              <span className="inline-block w-4 h-4 border-2 border-dark-bg border-t-transparent rounded-full animate-spin" />
-            </span>
-          ) : (
-            'Spustit simulaci'
-          )}
-        </button>
-        <button
-          onClick={runHexBattleAction}
-          disabled={!canSimulate}
-          title="Spustí jednu bitvu na hexové mapě s generálem přidělujícím útočné vektory"
-          className={`px-6 py-3 rounded-lg font-bold text-base border transition-all ${
-            canSimulate
-              ? 'border-blue-600 text-blue-300 hover:bg-blue-900/30 shadow-lg shadow-blue-900/20'
-              : 'bg-dark-surface text-parchment-dark border-dark-border cursor-not-allowed'
-          }`}
-        >
-          {isHexSimulating ? (
-            <span className="flex items-center gap-2">
-              Generuji mapu...
-              <span className="inline-block w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-            </span>
-          ) : (
-            '⬡ Hex Bitva'
-          )}
-        </button>
+      <div className="flex justify-center gap-3 py-2 flex-wrap items-stretch">
+
+        {/* Monte Carlo */}
+        <div className="flex flex-col items-center gap-1">
+          <button
+            onClick={runBattle}
+            disabled={!canSimulate}
+            className={`px-7 py-3 rounded-xl font-semibold text-base transition-all min-w-[180px] ${
+              canSimulate
+                ? 'bg-gold text-dark-bg hover:bg-gold-light shadow-lg shadow-gold/20 active:scale-95'
+                : 'bg-dark-surface text-parchment-dark border border-dark-border cursor-not-allowed opacity-50'
+            }`}
+          >
+            {isSimulating ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="inline-block w-4 h-4 border-2 border-dark-bg border-t-transparent rounded-full animate-spin" />
+                Simuluji… {simulationProgress}%
+              </span>
+            ) : (
+              <span className="flex items-center justify-center gap-2">
+                <span className="text-lg">📊</span> Monte Carlo
+              </span>
+            )}
+          </button>
+          <p className="text-xs text-parchment-dark/60">Statistická analýza</p>
+        </div>
+
+        {/* Separator */}
+        <div className="flex items-center">
+          <span className="text-parchment-dark/20 text-lg font-light select-none">|</span>
+        </div>
+
+        {/* Hex Battle */}
+        <div className="flex flex-col items-center gap-1">
+          <button
+            onClick={runHexBattleAction}
+            disabled={!canSimulate}
+            title="Spustí jednu bitvu na hexové mapě s generálem přidělujícím útočné vektory"
+            className={`px-7 py-3 rounded-xl font-semibold text-base border transition-all min-w-[180px] ${
+              canSimulate
+                ? 'border-blue-500/60 text-blue-300 bg-blue-950/30 hover:bg-blue-900/40 hover:border-blue-400 active:scale-95'
+                : 'bg-dark-surface text-parchment-dark border-dark-border cursor-not-allowed opacity-50'
+            }`}
+          >
+            {isHexSimulating ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="inline-block w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                Generuji mapu…
+              </span>
+            ) : (
+              <span className="flex items-center justify-center gap-2">
+                <span className="text-lg">⬡</span> Hex Bitva
+              </span>
+            )}
+          </button>
+          <p className="text-xs text-parchment-dark/60">Krok po kroku na mapě</p>
+        </div>
+
       </div>
 
       {!canSimulate && !isSimulating && (armyA.length === 0 || armyB.length === 0) && (
-        <p className="text-center text-parchment-dark text-sm -mt-2">
+        <p className="text-center text-parchment-dark/60 text-sm -mt-2">
           Vyber alespoň jednu jednotku na každé straně
         </p>
       )}
