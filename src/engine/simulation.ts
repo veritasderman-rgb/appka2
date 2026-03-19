@@ -25,6 +25,10 @@ interface UnitStats {
   spell_damage: number;
   spell_kills: number;
   spell_heals: number;
+  /** targetName → total kills caused by spells on that target */
+  spell_kills_by_target: Record<string, number>;
+  /** spellName → times cast */
+  spell_used: Record<string, number>;
 }
 
 interface SingleBattleResult {
@@ -43,6 +47,8 @@ interface SpellStats {
   spell_damage: number;
   spell_kills: number;
   spell_heals: number;
+  spell_kills_by_target: Record<string, number>;
+  spell_used: Record<string, number>;
 }
 
 /** Spell-aware wrapper for a combat unit */
@@ -181,7 +187,7 @@ function simulateSingleBattle(
       spellState: enabledIds.length > 0 ? initSpellState(combat, enabledIds) : undefined,
       buffs: [],
       ccs: [],
-      spellStats: { spells_cast: 0, spell_damage: 0, spell_kills: 0, spell_heals: 0 },
+      spellStats: { spells_cast: 0, spell_damage: 0, spell_kills: 0, spell_heals: 0, spell_kills_by_target: {}, spell_used: {} },
     };
   });
   const armyB: CombatUnitWithSpells[] = unitsB.map(u => {
@@ -192,7 +198,7 @@ function simulateSingleBattle(
       spellState: enabledIds.length > 0 ? initSpellState(combat, enabledIds) : undefined,
       buffs: [],
       ccs: [],
-      spellStats: { spells_cast: 0, spell_damage: 0, spell_kills: 0, spell_heals: 0 },
+      spellStats: { spells_cast: 0, spell_damage: 0, spell_kills: 0, spell_heals: 0, spell_kills_by_target: {}, spell_used: {} },
     };
   });
 
@@ -229,6 +235,12 @@ function simulateSingleBattle(
       unitA.spellStats.spell_damage += result.damageDealt;
       unitA.spellStats.spell_kills += result.kills;
       unitA.spellStats.spell_heals += result.soldiersRestored;
+      if (result.kills > 0) {
+        const tname = target.combat.unit.name;
+        unitA.spellStats.spell_kills_by_target[tname] = (unitA.spellStats.spell_kills_by_target[tname] ?? 0) + result.kills;
+      }
+      const snameA = result.spell.name;
+      unitA.spellStats.spell_used[snameA] = (unitA.spellStats.spell_used[snameA] ?? 0) + 1;
     }
 
     // Army B casters cast
@@ -245,6 +257,12 @@ function simulateSingleBattle(
       unitB.spellStats.spell_damage += result.damageDealt;
       unitB.spellStats.spell_kills += result.kills;
       unitB.spellStats.spell_heals += result.soldiersRestored;
+      if (result.kills > 0) {
+        const tname = target.combat.unit.name;
+        unitB.spellStats.spell_kills_by_target[tname] = (unitB.spellStats.spell_kills_by_target[tname] ?? 0) + result.kills;
+      }
+      const snameB = result.spell.name;
+      unitB.spellStats.spell_used[snameB] = (unitB.spellStats.spell_used[snameB] ?? 0) + 1;
     }
 
     // === AERIAL RANGED PHASE (LL — Déšť střel, every BK) ===
@@ -710,6 +728,72 @@ export function runSimulation(
       keyFactors.push(`Vzdušný souboj: Spojenci ${aFlying.length} vs Nepřátelé ${bFlying.length} leteckých jednotek.`);
     }
   }
+
+  // === MAGIC FACTORS ===
+  function avgRecord(unitId: string, statsMap: Map<string, UnitStats[]>, field: 'spell_kills_by_target' | 'spell_used'): Record<string, number> {
+    const stats = statsMap.get(unitId) ?? [];
+    if (stats.length === 0) return {};
+    const agg: Record<string, number> = {};
+    for (const s of stats) {
+      for (const [k, v] of Object.entries(s[field])) {
+        agg[k] = (agg[k] ?? 0) + v;
+      }
+    }
+    const runs = stats.length;
+    return Object.fromEntries(Object.entries(agg).map(([k, v]) => [k, Math.round(v / runs * 10) / 10]));
+  }
+
+  const addMagicKeyFactors = (
+    units: Unit[],
+    unitResults: UnitResult[],
+    statsMap: Map<string, UnitStats[]>,
+    sideName: string,
+    enemyTotalDead: number,
+  ) => {
+    for (const u of units) {
+      const ur = unitResults.find(r => r.name === u.name);
+      if (!ur || ur.avg_spells_cast === 0) continue;
+
+      const killsByTarget = avgRecord(u.id, statsMap, 'spell_kills_by_target');
+      const spellUsed    = avgRecord(u.id, statsMap, 'spell_used');
+
+      const topTarget = Object.entries(killsByTarget).sort((a, b) => b[1] - a[1])[0];
+      const topSpells = Object.entries(spellUsed).sort((a, b) => b[1] - a[1]).slice(0, 2);
+
+      const parts: string[] = [];
+
+      if (topSpells.length > 0) {
+        const list = topSpells.map(([name, avg]) => `„${name}" (${avg}×)`).join(', ');
+        parts.push(`kouzla: ${list}`);
+      }
+      if (ur.avg_spell_kills > 0 && topTarget) {
+        parts.push(`zničí průměrně ${ur.avg_spell_kills} vojáků, nejvíce z „${topTarget[0]}" (${topTarget[1]})`);
+      } else if (ur.avg_spell_damage > 0 && ur.avg_spell_kills === 0) {
+        parts.push(`způsobí ${ur.avg_spell_damage} HP poškození (bez přímých obětí)`);
+      }
+      if (ur.avg_spell_heals > 0) {
+        parts.push(`léčí průměrně ${ur.avg_spell_heals} vojáků`);
+      }
+
+      if (parts.length > 0) {
+        keyFactors.push(`🔮 [${sideName}] „${u.name}" — ${parts.join('; ')}.`);
+      }
+    }
+
+    // Overall magic share of enemy casualties
+    const magicKills = unitResults.filter(ur => ur.avg_spells_cast > 0).reduce((s, ur) => s + ur.avg_spell_kills, 0);
+    if (magicKills > 0 && enemyTotalDead > 0) {
+      const pct = Math.round(magicKills / enemyTotalDead * 100);
+      if (pct >= 25) {
+        keyFactors.push(`🔮 Magie ${sideName} tvoří ${pct}% nepřátelských ztrát — kouzla jsou klíčová pro výsledek.`);
+      }
+    }
+  };
+
+  const hasMagicA = aUnitResults.some(ur => ur.avg_spells_cast > 0);
+  const hasMagicB = bUnitResults.some(ur => ur.avg_spells_cast > 0);
+  if (hasMagicA) addMagicKeyFactors(unitsA, aUnitResults, aUnitStats, 'Spojenci', bTotalLosses);
+  if (hasMagicB) addMagicKeyFactors(unitsB, bUnitResults, bUnitStats, 'Nepřátelé', aTotalLosses);
 
   const simulationResult: SimulationResult = {
     total_simulations: n,

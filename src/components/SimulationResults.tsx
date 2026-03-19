@@ -133,6 +133,11 @@ export function SimulationResults({ result, history, onSelectHistory, onBack }: 
         <div className="text-2xl text-gold">{winPct}%</div>
       </div>
 
+      {/* Key factors — shown right below winner for immediate insight */}
+      {result.key_factors.length > 0 && (
+        <KeyFactorsPanel factors={result.key_factors} />
+      )}
+
       {/* Probability pie + stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Pie chart */}
@@ -379,21 +384,6 @@ export function SimulationResults({ result, history, onSelectHistory, onBack }: 
         <BattleLog log={result.detailed_log} />
       )}
 
-      {/* Key factors */}
-      {result.key_factors.length > 0 && (
-        <div className="bg-dark-card border border-dark-border rounded-lg p-4">
-          <h3 className="text-gold font-bold mb-3">Klíčové faktory</h3>
-          <ul className="space-y-2">
-            {result.key_factors.map((f, i) => (
-              <li key={i} className="text-sm text-parchment flex items-start gap-2">
-                <span className="text-gold shrink-0">&#9670;</span>
-                {f}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
       {/* Simulation history */}
       {history && history.length > 1 && onSelectHistory && (
         <div className="bg-dark-card border border-dark-border rounded-lg p-4">
@@ -432,6 +422,38 @@ export function SimulationResults({ result, history, onSelectHistory, onBack }: 
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function KeyFactorsPanel({ factors }: { factors: string[] }) {
+  // Classify each factor by its leading emoji for styling
+  const classify = (f: string): { border: string; bg: string; dot: string } => {
+    if (f.startsWith('🔮')) return { border: 'border-purple-500/40', bg: 'bg-purple-950/20', dot: 'text-purple-400' };
+    if (f.startsWith('⬆') || f.includes('leteck') || f.includes('vzdušn')) return { border: 'border-sky-500/40', bg: 'bg-sky-950/20', dot: 'text-sky-400' };
+    if (f.includes('dominuj') || f.includes('jistý') || f.includes('navrch')) return { border: 'border-gold/40', bg: 'bg-gold/5', dot: 'text-gold' };
+    if (f.includes('Morální') || f.includes('selhává') || f.includes('útěk')) return { border: 'border-yellow-500/40', bg: 'bg-yellow-950/20', dot: 'text-yellow-400' };
+    if (f.includes('zničen') || f.includes('Šance zničen')) return { border: 'border-blood-light/40', bg: 'bg-red-950/20', dot: 'text-blood-light' };
+    if (f.includes('bitva') || f.includes('BK') || f.includes('variabilit')) return { border: 'border-blue-500/40', bg: 'bg-blue-950/20', dot: 'text-blue-400' };
+    return { border: 'border-dark-border', bg: '', dot: 'text-parchment-dark' };
+  };
+
+  return (
+    <div className="bg-dark-card border border-dark-border rounded-xl p-4">
+      <h3 className="text-sm font-semibold text-parchment-dark uppercase tracking-wider mb-3">
+        Klíčové faktory
+      </h3>
+      <ul className="space-y-2">
+        {factors.map((f, i) => {
+          const { border, bg, dot } = classify(f);
+          return (
+            <li key={i} className={`flex items-start gap-3 text-sm rounded-lg border px-3 py-2.5 ${border} ${bg}`}>
+              <span className={`${dot} shrink-0 mt-0.5 text-base leading-none`}>◆</span>
+              <span className="text-parchment leading-snug">{f.replace(/^[🔮⬆]\s*/, '')}</span>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
