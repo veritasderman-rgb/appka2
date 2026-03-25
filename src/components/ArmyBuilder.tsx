@@ -1,5 +1,6 @@
 import { useBattleStore } from '../store/battleStore';
 import { allianceUnits, sampleEnemyUnits } from '../data/alliance_units';
+import { enemyUnits } from '../data/enemy_units';
 import { UnitPicker } from './UnitPicker';
 import { ArmyPanel } from './ArmyPanel';
 import { BattleConfigPanel } from './BattleConfig';
@@ -106,7 +107,7 @@ export function ArmyBuilder() {
           activeSide !== 'enemy' ? 'hidden md:flex' : 'flex'
         }`}>
           <UnitPicker
-            units={[...sampleEnemyUnits, ...customEnemyUnits]}
+            units={[...enemyUnits, ...sampleEnemyUnits, ...customEnemyUnits]}
             onAdd={addToArmyB}
             title="Dostupní Nepřátelé"
             side="enemy"
