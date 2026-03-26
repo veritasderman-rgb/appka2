@@ -14,6 +14,7 @@ export function ArmyBuilder() {
     removeFromArmyA, removeFromArmyB,
     updateUnitCount, toggleSpell,
     clearArmyA, clearArmyB,
+    loadAllVsAll,
     customAllianceUnits, customEnemyUnits,
     config, setConfig,
     runBattle, isSimulating, simulationProgress,
@@ -21,6 +22,10 @@ export function ArmyBuilder() {
   } = useBattleStore();
 
   const [activeSide, setActiveSide] = useState<'alliance' | 'enemy'>('alliance');
+  const [allVsAllCount, setAllVsAllCount] = useState(100);
+
+  const allAllianceUnits = [...allianceUnits, ...customAllianceUnits];
+  const allEnemyUnitsArr = [...enemyUnits, ...sampleEnemyUnits, ...customEnemyUnits];
 
   const canSimulate = armyA.length > 0 && armyB.length > 0 && !isSimulating && !isHexSimulating;
 
@@ -63,7 +68,7 @@ export function ArmyBuilder() {
           activeSide !== 'alliance' ? 'hidden md:flex' : 'flex'
         }`}>
           <UnitPicker
-            units={[...allianceUnits, ...customAllianceUnits]}
+            units={allAllianceUnits}
             onAdd={addToArmyA}
             title="Dostupní Spojenci"
             side="alliance"
@@ -107,12 +112,33 @@ export function ArmyBuilder() {
           activeSide !== 'enemy' ? 'hidden md:flex' : 'flex'
         }`}>
           <UnitPicker
-            units={[...enemyUnits, ...sampleEnemyUnits, ...customEnemyUnits]}
+            units={allEnemyUnitsArr}
             onAdd={addToArmyB}
             title="Dostupní Nepřátelé"
             side="enemy"
           />
         </div>
+      </div>
+
+      {/* All vs All */}
+      <div className="flex justify-center items-center gap-2 py-1">
+        <button
+          onClick={() => loadAllVsAll(allAllianceUnits, allEnemyUnitsArr, allVsAllCount)}
+          disabled={isSimulating || isHexSimulating}
+          className="px-4 py-2 rounded-lg font-semibold text-sm border border-purple-500/60 text-purple-300 bg-purple-950/30 hover:bg-purple-900/40 hover:border-purple-400 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Všichni proti všem
+        </button>
+        <label className="flex items-center gap-1 text-xs text-parchment-dark">
+          <span>Výchozí počet:</span>
+          <input
+            type="number"
+            min={1}
+            value={allVsAllCount}
+            onChange={e => setAllVsAllCount(Math.max(1, Number(e.target.value) || 1))}
+            className="w-16 px-1 py-1 rounded bg-dark-surface border border-dark-border text-parchment text-xs text-center"
+          />
+        </label>
       </div>
 
       {/* Run buttons */}
