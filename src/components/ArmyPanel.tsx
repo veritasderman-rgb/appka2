@@ -1,6 +1,10 @@
 import type { ArmyUnit } from '../store/battleStore';
+import { useBattleStore } from '../store/battleStore';
+import type { ArmyPreset } from '../store/slices/armyPresetsSlice';
+import type { Unit } from '../engine/types';
 import { UnitCard } from './UnitCard';
 import { avgDamage } from '../engine/dice';
+import { useState } from 'react';
 
 interface ArmyPanelProps {
   units: ArmyUnit[];
@@ -11,9 +15,15 @@ interface ArmyPanelProps {
   title: string;
   side: 'alliance' | 'enemy';
   isAttacker?: boolean;
+  availableUnits: Unit[];
 }
 
-export function ArmyPanel({ units, onRemove, onCountChange, onSpellToggle, onClear, title, side, isAttacker }: ArmyPanelProps) {
+export function ArmyPanel({ units, onRemove, onCountChange, onSpellToggle, onClear, title, side, isAttacker, availableUnits }: ArmyPanelProps) {
+  const { presetsA, presetsB, savePreset, loadPreset, deletePreset } = useBattleStore();
+  const presets: ArmyPreset[] = side === 'alliance' ? presetsA : presetsB;
+  const [presetName, setPresetName] = useState('');
+  const [showPresets, setShowPresets] = useState(false);
+
   const totalSoldiers = units.reduce((s, u) => s + u.count, 0);
   const avgZU = totalSoldiers > 0
     ? (units.reduce((s, u) => s + u.zu * u.count, 0) / totalSoldiers).toFixed(1)
@@ -25,6 +35,22 @@ export function ArmyPanel({ units, onRemove, onCountChange, onSpellToggle, onCle
   }, 0);
 
   const sideColor = side === 'alliance' ? 'alliance' : 'enemy';
+
+  const handleSave = () => {
+    const name = presetName.trim();
+    if (!name || units.length === 0) return;
+    savePreset(side, name);
+    setPresetName('');
+  };
+
+  const handleLoad = (name: string) => {
+    loadPreset(side, name, availableUnits);
+    setShowPresets(false);
+  };
+
+  const handleDelete = (name: string) => {
+    deletePreset(side, name);
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -41,15 +67,74 @@ export function ArmyPanel({ units, onRemove, onCountChange, onSpellToggle, onCle
             </span>
           )}
         </div>
-        {units.length > 0 && (
+        <div className="flex items-center gap-1">
           <button
-            onClick={onClear}
-            className="text-xs text-blood-light hover:text-red-400 border border-blood/30 rounded px-2 py-1"
+            onClick={() => setShowPresets(!showPresets)}
+            className="text-xs text-parchment-dark hover:text-gold border border-dark-border rounded px-2 py-1"
+            title="Uložená uskupení"
           >
-            Vyčistit
+            Uskupení ({presets.length})
           </button>
-        )}
+          {units.length > 0 && (
+            <button
+              onClick={onClear}
+              className="text-xs text-blood-light hover:text-red-400 border border-blood/30 rounded px-2 py-1"
+            >
+              Vyčistit
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Presets panel */}
+      {showPresets && (
+        <div className="mb-3 bg-dark-surface border border-dark-border rounded-lg p-2 space-y-2">
+          {/* Save */}
+          <div className="flex gap-1">
+            <input
+              type="text"
+              value={presetName}
+              onChange={e => setPresetName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSave()}
+              placeholder="Název uskupení…"
+              className="flex-1 px-2 py-1 rounded bg-dark-card border border-dark-border text-parchment text-xs"
+            />
+            <button
+              onClick={handleSave}
+              disabled={!presetName.trim() || units.length === 0}
+              className="text-xs px-2 py-1 rounded border border-gold/40 text-gold hover:bg-gold/10 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Uložit
+            </button>
+          </div>
+
+          {/* List */}
+          {presets.length === 0 ? (
+            <p className="text-xs text-parchment-dark text-center py-1">Žádná uložená uskupení</p>
+          ) : (
+            <div className="space-y-1 max-h-32 overflow-y-auto">
+              {presets.map(p => (
+                <div key={p.name} className="flex items-center justify-between bg-dark-card rounded px-2 py-1 border border-dark-border">
+                  <button
+                    onClick={() => handleLoad(p.name)}
+                    className="text-xs text-parchment hover:text-gold truncate flex-1 text-left"
+                    title={`Načíst: ${p.units.length} jednotek`}
+                  >
+                    {p.name} <span className="text-parchment-dark">({p.units.length})</span>
+                  </button>
+                  <button
+                    onClick={() => handleDelete(p.name)}
+                    className="text-xs text-blood-light hover:text-red-400 ml-2 shrink-0"
+                    title="Smazat"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Summary */}
       {units.length > 0 && (
