@@ -49,6 +49,7 @@ export interface ArmySlice {
   toggleSpell: (faction: 'alliance' | 'enemy', instanceId: string, spellId: string) => void;
   clearArmyA: () => void;
   clearArmyB: () => void;
+  loadAllVsAll: (allianceUnits: Unit[], enemyUnits: Unit[], defaultCount: number) => void;
 }
 
 export const createArmySlice: StateCreator<BattleStore, [], [], ArmySlice> = (set, get) => ({
@@ -94,4 +95,15 @@ export const createArmySlice: StateCreator<BattleStore, [], [], ArmySlice> = (se
 
   clearArmyA: () => set({ armyA: [] }),
   clearArmyB: () => set({ armyB: [] }),
+
+  loadAllVsAll: (allAlliance, allEnemy, defaultCount) => {
+    const toArmy = (units: Unit[]): ArmyUnit[] =>
+      units.map(u => ({
+        ...u,
+        count: u.count > 0 ? u.count : defaultCount,
+        instanceId: nextInstanceId(u.id),
+        ...buildSpellState(u),
+      }));
+    set({ armyA: toArmy(allAlliance), armyB: toArmy(allEnemy) });
+  },
 });
