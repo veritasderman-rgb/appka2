@@ -30,6 +30,7 @@ export const UnitSchema = z.object({
   thac0: z.number().int().min(-10).max(30),
   ac: z.number().int().min(-10).max(20),
   dmg: z.string().regex(DICE_REGEX, 'Musí být ve formátu kostky (např. 2k8+4)'),
+  dmg_melee: z.string().regex(DICE_REGEX, 'Musí být ve formátu kostky (např. 1k4)').optional(),
   hp_per_soldier: z.number().int().min(1).max(1000),
   initiative: z.number().int().min(0).max(30),
   initiative_secondary: z.number().int().min(0).max(30).optional(),

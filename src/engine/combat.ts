@@ -29,6 +29,9 @@ export function isFlybyUnit(unit: CombatUnit): boolean {
   return unit.unit.flyby === true && unit.unit.flying === true;
 }
 
+/** Cavalry unit types that can engage ranged units in melee */
+const CAVALRY_TYPES: UnitType[] = ['LJ', 'TJ', 'SJ'];
+
 export interface CombatUnit {
   unit: Unit;
   count: number;
@@ -43,11 +46,33 @@ export interface CombatUnit {
   isBattleDefender: boolean;
   /** Remaining ammo for ranged units (undefined = unlimited / melee) */
   ammo_remaining?: number;
+  /** Ranged unit engaged by cavalry — cannot shoot, uses dmg_melee */
+  engagedByCavalry: boolean;
 }
 
-/** Returns true when this unit type is ranged */
+/** Returns true when this unit type is ranged and not engaged by cavalry */
 export function isRangedUnit(unit: CombatUnit): boolean {
   return RANGED_TYPES.includes(unit.unit.type) && (unit.ammo_remaining === undefined || unit.ammo_remaining > 0);
+}
+
+/** Returns true if the unit is a cavalry type */
+export function isCavalryUnit(unit: CombatUnit): boolean {
+  return CAVALRY_TYPES.includes(unit.unit.type);
+}
+
+/**
+ * Get effective damage string — uses dmg_melee when ranged unit is engaged by cavalry.
+ * If dmg_melee is not set, auto-derives a weaker melee damage by halving the bonus.
+ */
+export function getEffectiveDmg(unit: CombatUnit): string {
+  if (!unit.engagedByCavalry) return unit.unit.dmg;
+  if (unit.unit.dmg_melee) return unit.unit.dmg_melee;
+  // Auto-derive: parse "XkY+Z" → "XkY+floor(Z/2)", or reduce die size
+  const match = unit.unit.dmg.match(/^(\d+)k(\d+)(?:\+(\d+))?$/);
+  if (!match) return unit.unit.dmg;
+  const [, count, sides, bonus] = match;
+  const newBonus = bonus ? Math.floor(Number(bonus) / 2) : 0;
+  return newBonus > 0 ? `${count}k${sides}+${newBonus}` : `${count}k${sides}`;
 }
 
 /** Calculate commander bonuses — applied when commanderBonuses config is enabled */
@@ -80,6 +105,7 @@ export function createCombatUnit(unit: Unit, isBattleDefender: boolean = false, 
     critical_misses: 0,
     isBattleDefender,
     ammo_remaining: RANGED_TYPES.includes(unit.type) ? (unit.ammo ?? 10) : undefined,
+    engagedByCavalry: false,
   };
 }
 
@@ -395,13 +421,14 @@ function resolveAttack(
     hit = true;
     atk.critical_hits++;
     const critMult = rollDie(4);
-    const baseDmg = rollDamage(atk.unit.dmg);
+    const dmgStr = getEffectiveDmg(atk);
+    const baseDmg = rollDamage(dmgStr);
     const multiplier = critMult === 1 ? 8 : critMult;
     totalDamage = baseDmg * multiplier * effectiveCount;
   } else {
     hit = roll >= needed;
     if (hit) {
-      totalDamage = rollDamage(atk.unit.dmg) * effectiveCount;
+      totalDamage = rollDamage(getEffectiveDmg(atk)) * effectiveCount;
     }
   }
 
