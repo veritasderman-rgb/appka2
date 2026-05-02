@@ -138,6 +138,22 @@ export function SimulationResults({ result, history, onSelectHistory, onBack }: 
         <KeyFactorsPanel factors={result.key_factors} />
       )}
 
+      {/* Battle report */}
+      {result.battle_report && (
+        <div className="bg-dark-card border border-dark-border rounded-lg p-4">
+          <h3 className="text-gold font-bold mb-3">Situační zpráva</h3>
+          <div className="prose prose-invert prose-sm max-w-none text-parchment leading-relaxed space-y-2">
+            {result.battle_report.split('\n').map((line, i) => {
+              if (line.startsWith('## ')) {
+                return <h4 key={i} className="text-gold-light font-bold text-sm mt-3 mb-1">{line.slice(3)}</h4>;
+              }
+              if (line.trim() === '') return null;
+              return <p key={i} className="text-parchment text-sm m-0">{line}</p>;
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Probability pie + stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Pie chart */}

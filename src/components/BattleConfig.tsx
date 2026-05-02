@@ -117,6 +117,8 @@ export function BattleConfigPanel({ config, onChange }: BattleConfigProps) {
               <option value={20}>20 BK</option>
               <option value={30}>30 BK</option>
               <option value={50}>50 BK</option>
+              <option value={100}>100 BK</option>
+              <option value={200}>200 BK</option>
             </select>
           </div>
         </div>

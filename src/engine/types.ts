@@ -187,6 +187,7 @@ export interface SimulationResult {
   };
   bk_distribution: number[];
   key_factors: string[];
+  battle_report: string;
   min_duration_bk: number;
   max_duration_bk: number;
   stddev_duration_bk: number;
