@@ -10,6 +10,7 @@ interface ArmyPanelProps {
   units: ArmyUnit[];
   onRemove: (instanceId: string) => void;
   onCountChange: (instanceId: string, count: number) => void;
+  onStatChange: (instanceId: string, field: string, value: number | string) => void;
   onSpellToggle: (instanceId: string, spellId: string) => void;
   onClear: () => void;
   title: string;
@@ -167,6 +168,7 @@ export function ArmyPanel({ units, onRemove, onCountChange, onSpellToggle, onCle
               unit={unit}
               onRemove={() => onRemove(unit.instanceId)}
               onCountChange={c => onCountChange(unit.instanceId, c)}
+              onStatChange={(f, v) => onStatChange(unit.instanceId, f, v)}
               onSpellToggle={sid => onSpellToggle(unit.instanceId, sid)}
             />
           ))

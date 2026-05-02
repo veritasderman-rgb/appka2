@@ -12,7 +12,7 @@ export function ArmyBuilder() {
     armyA, armyB,
     addToArmyA, addToArmyB,
     removeFromArmyA, removeFromArmyB,
-    updateUnitCount, toggleSpell,
+    updateUnitCount, updateUnitStat, toggleSpell,
     clearArmyA, clearArmyB,
     loadAllVsAll,
     customAllianceUnits, customEnemyUnits,
@@ -83,6 +83,7 @@ export function ArmyBuilder() {
             units={armyA}
             onRemove={removeFromArmyA}
             onCountChange={(instanceId, c) => updateUnitCount('alliance', instanceId, c)}
+            onStatChange={(instanceId, f, v) => updateUnitStat('alliance', instanceId, f, v)}
             onSpellToggle={(instanceId, spellId) => toggleSpell('alliance', instanceId, spellId)}
             onClear={clearArmyA}
             title="Armáda Spojenců"
@@ -100,6 +101,7 @@ export function ArmyBuilder() {
             units={armyB}
             onRemove={removeFromArmyB}
             onCountChange={(instanceId, c) => updateUnitCount('enemy', instanceId, c)}
+            onStatChange={(instanceId, f, v) => updateUnitStat('enemy', instanceId, f, v)}
             onSpellToggle={(instanceId, spellId) => toggleSpell('enemy', instanceId, spellId)}
             onClear={clearArmyB}
             title="Armáda Nepřátel"

@@ -8,12 +8,13 @@ interface UnitCardProps {
   onClick?: () => void;
   onRemove?: () => void;
   onCountChange?: (count: number) => void;
+  onStatChange?: (field: string, value: number | string) => void;
   onSpellToggle?: (spellId: string) => void;
   compact?: boolean;
   selected?: boolean;
 }
 
-export function UnitCard({ unit, onClick, onRemove, onCountChange, onSpellToggle, compact, selected }: UnitCardProps) {
+export function UnitCard({ unit, onClick, onRemove, onCountChange, onStatChange, onSpellToggle, compact, selected }: UnitCardProps) {
   if (compact) {
     return (
       <div
@@ -41,6 +42,8 @@ export function UnitCard({ unit, onClick, onRemove, onCountChange, onSpellToggle
       </div>
     );
   }
+
+  const editable = !!onStatChange;
 
   return (
     <div className="border border-dark-border rounded-lg bg-dark-card overflow-hidden">
@@ -72,19 +75,19 @@ export function UnitCard({ unit, onClick, onRemove, onCountChange, onSpellToggle
         )}
 
         <div className="grid grid-cols-3 gap-2 text-center text-sm mb-2">
-          <StatBox label="THAC0" value={unit.thac0} />
-          <StatBox label="AC" value={unit.ac} />
-          <StatBox label="DMG" value={unit.dmg} />
+          <EditableStat label="THAC0" value={unit.thac0} field="thac0" editable={editable} onChange={onStatChange} type="number" />
+          <EditableStat label="AC" value={unit.ac} field="ac" editable={editable} onChange={onStatChange} type="number" />
+          <EditableStat label="DMG" value={unit.dmg} field="dmg" editable={editable} onChange={onStatChange} type="text" />
         </div>
 
         <div className="grid grid-cols-3 gap-2 text-center text-sm mb-2">
-          <StatBox label="INI" value={unit.initiative_secondary ? `${unit.initiative}/${unit.initiative_secondary}` : unit.initiative} />
-          <StatBox label="HP/v" value={unit.hp_per_soldier} />
-          <StatBox label="Morálka" value={unit.morale} />
+          <EditableStat label="INI" value={unit.initiative} field="initiative" editable={editable} onChange={onStatChange} type="number" />
+          <EditableStat label="HP/v" value={unit.hp_per_soldier} field="hp_per_soldier" editable={editable} onChange={onStatChange} type="number" />
+          <EditableStat label="Morálka" value={unit.morale} field="morale" editable={editable} onChange={onStatChange} type="number" />
         </div>
 
         <div className="grid grid-cols-3 gap-2 text-center text-sm mb-2">
-          <StatBox label="Únava" value={`${unit.fatigue} BK`} />
+          <EditableStat label="Únava" value={unit.fatigue} field="fatigue" editable={editable} onChange={onStatChange} type="number" suffix=" BK" />
           <StatBox label="Pohyb" value={`${unit.movement_hexes} hex`} />
           <StatBox label="Priorita" value={unit.movement_priority} />
         </div>
@@ -136,6 +139,35 @@ export function UnitCard({ unit, onClick, onRemove, onCountChange, onSpellToggle
           <SpellSelector spells={unit.spells} onToggle={onSpellToggle} unitCount={unit.count} unitType={unit.type} />
         )}
       </div>
+    </div>
+  );
+}
+
+function EditableStat({ label, value, field, editable, onChange, type, suffix }: {
+  label: string;
+  value: string | number;
+  field: string;
+  editable: boolean;
+  onChange?: (field: string, value: number | string) => void;
+  type: 'number' | 'text';
+  suffix?: string;
+}) {
+  if (!editable || !onChange) {
+    return <StatBox label={label} value={suffix ? `${value}${suffix}` : value} />;
+  }
+
+  return (
+    <div className="bg-dark-surface rounded px-1 py-1 border border-dark-border">
+      <div className="text-xs text-parchment-dark">{label}</div>
+      <input
+        type={type}
+        value={value}
+        onChange={e => {
+          const v = type === 'number' ? (parseInt(e.target.value) || 0) : e.target.value;
+          onChange(field, v);
+        }}
+        className="w-full bg-transparent text-parchment font-bold text-sm text-center outline-none border-b border-transparent focus:border-gold/50"
+      />
     </div>
   );
 }
