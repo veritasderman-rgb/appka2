@@ -19,7 +19,7 @@ interface ArmyPanelProps {
   availableUnits: Unit[];
 }
 
-export function ArmyPanel({ units, onRemove, onCountChange, onStatChange, onSpellToggle, onClear, title, side, isAttacker, availableUnits }: ArmyPanelProps) {
+export function ArmyPanel({ units, onRemove, onCountChange, onSpellToggle, onClear, title, side, isAttacker, availableUnits }: ArmyPanelProps) {
   const { presetsA, presetsB, savePreset, loadPreset, deletePreset } = useBattleStore();
   const presets: ArmyPreset[] = side === 'alliance' ? presetsA : presetsB;
   const [presetName, setPresetName] = useState('');
