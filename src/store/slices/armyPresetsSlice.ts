@@ -7,6 +7,7 @@ export interface ArmyPresetEntry {
   id: string;
   name: string;
   count: number;
+  overrides?: Partial<Record<string, number | string>>;
 }
 
 export interface ArmyPreset {
@@ -16,6 +17,10 @@ export interface ArmyPreset {
 
 const STORAGE_KEY_A = 'army_presets_alliance';
 const STORAGE_KEY_B = 'army_presets_enemy';
+
+const SAVED_STAT_FIELDS = [
+  'thac0', 'ac', 'dmg', 'hp_per_soldier', 'initiative', 'morale', 'fatigue',
+] as const;
 
 function loadPresets(key: string): ArmyPreset[] {
   try {
@@ -32,7 +37,13 @@ function savePresets(key: string, presets: ArmyPreset[]) {
 }
 
 function armyToPresetEntries(army: ArmyUnit[]): ArmyPresetEntry[] {
-  return army.map(u => ({ id: u.id, name: u.name, count: u.count }));
+  return army.map(u => {
+    const overrides: Record<string, number | string> = {};
+    for (const f of SAVED_STAT_FIELDS) {
+      overrides[f] = u[f] as number | string;
+    }
+    return { id: u.id, name: u.name, count: u.count, overrides };
+  });
 }
 
 export interface ArmyPresetsSlice {
@@ -75,6 +86,7 @@ export const createArmyPresetsSlice: StateCreator<BattleStore, [], [], ArmyPrese
       if (!base) continue;
       army.push({
         ...base,
+        ...entry.overrides,
         count: entry.count,
         instanceId: nextInstanceId(base.id),
         ...buildSpellState(base),

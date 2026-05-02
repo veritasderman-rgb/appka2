@@ -383,7 +383,7 @@ function simulateSingleBattle(
 
       // Army A cavalry engages Army B ranged
       const usedRangedB = new Set<string>();
-      for (const cav of cavA) {
+      for (const _cav of cavA) {
         for (const ranged of rangedBTargets) {
           if (usedRangedB.has(ranged.combat.unit.id)) continue;
           ranged.combat.engagedByCavalry = true;
@@ -393,7 +393,7 @@ function simulateSingleBattle(
       }
       // Army B cavalry engages Army A ranged
       const usedRangedA = new Set<string>();
-      for (const cav of cavB) {
+      for (const _cav of cavB) {
         for (const ranged of rangedATargets) {
           if (usedRangedA.has(ranged.combat.unit.id)) continue;
           ranged.combat.engagedByCavalry = true;
