@@ -831,6 +831,16 @@ export function runSimulation(
   if (hasMagicA) addMagicKeyFactors(unitsA, aUnitResults, aUnitStats, 'Spojenci', bTotalLosses);
   if (hasMagicB) addMagicKeyFactors(unitsB, bUnitResults, bUnitStats, 'Nepřátelé', aTotalLosses);
 
+  // === BATTLE REPORT ===
+  const battleReport = generateBattleReport(
+    aWinPct, bWinPct,
+    aUnitResults, bUnitResults,
+    aTotalLosses, bTotalLosses,
+    aTotalOriginal, bTotalOriginal,
+    avgDuration, stddevBK,
+    unitsA, unitsB,
+  );
+
   const simulationResult: SimulationResult = {
     total_simulations: n,
     wins,
@@ -854,6 +864,7 @@ export function runSimulation(
     },
     bk_distribution: bkDist,
     key_factors: keyFactors,
+    battle_report: battleReport,
     min_duration_bk: minBK,
     max_duration_bk: maxBK,
     stddev_duration_bk: stddevBK,
@@ -868,4 +879,142 @@ export function runSimulation(
   }
 
   return simulationResult;
+}
+
+function generateBattleReport(
+  aWinPct: number, bWinPct: number,
+  aUnits: UnitResult[], bUnits: UnitResult[],
+  aLosses: number, bLosses: number,
+  aOriginal: number, bOriginal: number,
+  avgDuration: number, stddevBK: number,
+  unitsA: Unit[], unitsB: Unit[],
+): string {
+  const lines: string[] = [];
+  const winner = aWinPct > bWinPct ? 'Spojenci' : bWinPct > aWinPct ? 'Nepřátelé' : null;
+  const loser = winner === 'Spojenci' ? 'Nepřátelé' : winner === 'Nepřátelé' ? 'Spojenci' : null;
+  const winPct = Math.max(aWinPct, bWinPct);
+  const winUnits = winner === 'Spojenci' ? aUnits : bUnits;
+  const loseUnits = winner === 'Spojenci' ? bUnits : aUnits;
+  const winSrc = winner === 'Spojenci' ? unitsA : unitsB;
+  const loseSrc = winner === 'Spojenci' ? unitsB : unitsA;
+  const winLosses = winner === 'Spojenci' ? aLosses : bLosses;
+  const winOriginal = winner === 'Spojenci' ? aOriginal : bOriginal;
+  const loseLosses = winner === 'Spojenci' ? bLosses : aLosses;
+  const loseOriginal = winner === 'Spojenci' ? bOriginal : aOriginal;
+
+  // --- Úvod ---
+  if (!winner) {
+    lines.push('## Výsledek: Nerozhodně');
+    lines.push(`Bitva skončila bez jasného vítěze. Obě strany utrpěly srovnatelné ztráty a žádná nezískala rozhodující převahu.`);
+  } else if (winPct >= 90) {
+    lines.push(`## Výsledek: Drtivé vítězství — ${winner}`);
+    lines.push(`${winner} zvítězili v ${winPct}% simulací. ${loser} nemají reálnou šanci na úspěch v této konfiguraci.`);
+  } else if (winPct >= 70) {
+    lines.push(`## Výsledek: Jasné vítězství — ${winner}`);
+    lines.push(`${winner} vítězí ve většině scénářů (${winPct}%). ${loser} mohou zvítězit jen za příznivých okolností.`);
+  } else if (winPct >= 55) {
+    lines.push(`## Výsledek: Těsné vítězství — ${winner}`);
+    lines.push(`${winner} mají mírnou převahu (${winPct}%), ale bitva je nejistá. Kritické hody a morálka mohou rozhodnout.`);
+  } else {
+    lines.push(`## Výsledek: Vyrovnaná bitva`);
+    lines.push(`${winner} vítězí s minimálním náskokem (${winPct}%). Výsledek závisí na náhodě.`);
+  }
+
+  // --- Poměr sil ---
+  lines.push('');
+  lines.push('## Poměr sil');
+  const aCount = aUnits.reduce((s, u) => s + u.original, 0);
+  const bCount = bUnits.reduce((s, u) => s + u.original, 0);
+  const ratio = aCount > 0 && bCount > 0 ? (aCount / bCount).toFixed(1) : '?';
+  lines.push(`Spojenci: ${aCount.toLocaleString()} vojáků (${aUnits.length} jednotek) vs Nepřátelé: ${bCount.toLocaleString()} vojáků (${bUnits.length} jednotek). Poměr ${ratio}:1.`);
+
+  // --- Klíčové jednotky vítěze ---
+  if (winner) {
+    lines.push('');
+    lines.push(`## Klíčové jednotky — ${winner}`);
+
+    const survivors = winUnits
+      .filter(u => u.original > 0)
+      .map(u => ({ ...u, survivalRate: Math.round((u.avg_remaining / u.original) * 100) }))
+      .sort((a, b) => b.survivalRate - a.survivalRate);
+
+    const bestSurvivors = survivors.filter(u => u.survivalRate >= 60).slice(0, 3);
+    if (bestSurvivors.length > 0) {
+      const list = bestSurvivors.map(u => `„${u.name}" (${u.survivalRate}% přežilo)`).join(', ');
+      lines.push(`Nejodolnější: ${list}. Tyto jednotky přežívají většinu bitev a tvoří páteř armády.`);
+    }
+
+    const magicUnits = winUnits.filter(u => u.avg_spell_kills > 0).sort((a, b) => b.avg_spell_kills - a.avg_spell_kills);
+    if (magicUnits.length > 0) {
+      const top = magicUnits[0];
+      lines.push(`Magická převaha: „${top.name}" průměrně zabíjí ${top.avg_spell_kills} nepřátel kouzly za bitvu.`);
+    }
+
+    const critStars = winUnits.filter(u => u.avg_critical_hits >= 1).sort((a, b) => b.avg_critical_hits - a.avg_critical_hits);
+    if (critStars.length > 0) {
+      const top = critStars[0];
+      lines.push(`Kritické zásahy: „${top.name}" má průměrně ${top.avg_critical_hits} kritických zásahů za bitvu.`);
+    }
+
+    // --- Slabá místa poraženého ---
+    lines.push('');
+    lines.push(`## Slabá místa — ${loser}`);
+
+    const destroyed = loseUnits
+      .filter(u => u.destruction_rate >= 40)
+      .sort((a, b) => b.destruction_rate - a.destruction_rate);
+
+    if (destroyed.length > 0) {
+      for (const u of destroyed.slice(0, 3)) {
+        const src = loseSrc.find(s => s.name === u.name);
+        const reason: string[] = [];
+        if (src && src.hp_per_soldier <= 10) reason.push('nízké HP');
+        if (src && src.ac >= 7) reason.push('slabé brnění');
+        if (u.morale_failure_rate >= 30) reason.push(`morálka selhává v ${u.morale_failure_rate}%`);
+        if (src && src.thac0 >= 18) reason.push('nepřesný útok');
+        const why = reason.length > 0 ? ` Důvod: ${reason.join(', ')}.` : '';
+        lines.push(`„${u.name}" — zničena v ${u.destruction_rate}% bitev (z ${u.original} vojáků přežívá průměrně ${u.avg_remaining}).${why}`);
+      }
+    } else {
+      const worstLoss = loseUnits.filter(u => u.original > 0).sort((a, b) => (b.avg_dead / b.original) - (a.avg_dead / a.original))[0];
+      if (worstLoss) {
+        lines.push(`Nejvyšší ztráty: „${worstLoss.name}" ztrácí průměrně ${Math.round(worstLoss.avg_dead / worstLoss.original * 100)}% svých vojáků.`);
+      }
+    }
+
+    // --- Ztráty vítěze ---
+    if (winOriginal > 0) {
+      const winLossPct = Math.round((winLosses / winOriginal) * 100);
+      lines.push('');
+      lines.push('## Cena vítězství');
+      if (winLossPct <= 10) {
+        lines.push(`${winner} vítězí prakticky beze ztrát (${winLossPct}% průměrných ztrát). Převaha je drtivá.`);
+      } else if (winLossPct <= 30) {
+        lines.push(`${winner} utrpí přijatelné ztráty (${winLossPct}%). Armáda zůstává bojeschopná.`);
+      } else if (winLossPct <= 60) {
+        lines.push(`${winner} vítězí, ale za cenu vysokých ztrát (${winLossPct}%). Pyrrhovo vítězství.`);
+      } else {
+        lines.push(`${winner} vítězí za cenu devastujících ztrát (${winLossPct}%). Armáda je po bitvě na pokraji kolapsu.`);
+      }
+    }
+  }
+
+  // --- Průběh bitvy ---
+  lines.push('');
+  lines.push('## Průběh');
+  if (avgDuration <= 3) {
+    lines.push(`Bitva je bleskově rychlá (průměr ${Math.round(avgDuration * 10) / 10} BK). Rozhoduje první střet — kdo udeří silněji, vyhrává.`);
+  } else if (avgDuration <= 8) {
+    lines.push(`Střední délka bitvy (${Math.round(avgDuration * 10) / 10} BK). Obě strany se zapojí plně, ale rozhodnutí přichází relativně brzy.`);
+  } else if (avgDuration <= 20) {
+    lines.push(`Dlouhá bitva (${Math.round(avgDuration * 10) / 10} BK). Únava a morálka se stávají důležitými faktory.`);
+  } else {
+    lines.push(`Vyčerpávající bitva (${Math.round(avgDuration * 10) / 10} BK). Jednotky s nízkou únavou kolabují, rozhoduje vytrvalost a regenerace.`);
+  }
+
+  if (stddevBK >= 5) {
+    lines.push(`Výsledky se velmi liší (odchylka ±${stddevBK} BK) — v některých scénářích bitva skončí rychle, v jiných se protáhne.`);
+  }
+
+  return lines.join('\n');
 }
