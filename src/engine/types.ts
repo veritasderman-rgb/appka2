@@ -48,6 +48,8 @@ export interface Unit {
   thac0: number;
   ac: number;
   dmg: string;
+  /** Melee damage for ranged units when engaged by cavalry (lower than ranged dmg) */
+  dmg_melee?: string;
   hp_per_soldier: number;
   initiative: number;
   initiative_secondary?: number;

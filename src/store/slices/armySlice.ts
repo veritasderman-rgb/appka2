@@ -46,6 +46,7 @@ export interface ArmySlice {
   removeFromArmyA: (instanceId: string) => void;
   removeFromArmyB: (instanceId: string) => void;
   updateUnitCount: (faction: 'alliance' | 'enemy', instanceId: string, count: number) => void;
+  updateUnitStat: (faction: 'alliance' | 'enemy', instanceId: string, field: string, value: number | string) => void;
   toggleSpell: (faction: 'alliance' | 'enemy', instanceId: string, spellId: string) => void;
   clearArmyA: () => void;
   clearArmyB: () => void;
@@ -80,6 +81,13 @@ export const createArmySlice: StateCreator<BattleStore, [], [], ArmySlice> = (se
         armyB: s.armyB.map(u => u.instanceId === instanceId ? { ...u, count: clampedCount } : u),
       }));
     }
+  },
+
+  updateUnitStat: (faction, instanceId, field, value) => {
+    const key = faction === 'alliance' ? 'armyA' : 'armyB';
+    set(s => ({
+      [key]: s[key].map(u => u.instanceId === instanceId ? { ...u, [field]: value } : u),
+    }));
   },
 
   toggleSpell: (faction, instanceId, spellId) => {

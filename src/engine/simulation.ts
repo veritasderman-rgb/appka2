@@ -1,4 +1,4 @@
-import { createCombatUnit, isDefeated, isRangedUnit, isFlyingUnit, isAerialRanged, isFlybyUnit, unitCanTargetFlying, simulateBK, simulateRangedAttack, simulateFlybyAttack } from './combat';
+import { createCombatUnit, isDefeated, isRangedUnit, isCavalryUnit, isFlyingUnit, isAerialRanged, isFlybyUnit, unitCanTargetFlying, simulateBK, simulateRangedAttack, simulateFlybyAttack } from './combat';
 import type { CombatUnit, SpellModifiers } from './combat';
 import type { ActiveEffectInfo, BattleConfig, BattleLogEntry, BKSnapshot, SimulationResult, Unit, UnitResult } from './types';
 import { getSpellById } from '../data/spells';
@@ -369,11 +369,46 @@ function simulateSingleBattle(
       }
     }
 
+    // === CAVALRY ENGAGEMENT — mark ranged units engaged by enemy cavalry ===
+    // Cavalry closes distance and forces ranged units into melee (dmg_melee, no shooting).
+    // Each cavalry unit can engage one ranged unit; matched by movement_priority.
+    {
+      const cavA = armyA.filter(u => !isDefeated(u.combat) && isCavalryUnit(u.combat));
+      const cavB = armyB.filter(u => !isDefeated(u.combat) && isCavalryUnit(u.combat));
+      const rangedATargets = armyA.filter(u => !isDefeated(u.combat) && isRangedUnit(u.combat) && !isAerialRanged(u.combat));
+      const rangedBTargets = armyB.filter(u => !isDefeated(u.combat) && isRangedUnit(u.combat) && !isAerialRanged(u.combat));
+
+      // Reset engagement flags each BK
+      for (const u of [...armyA, ...armyB]) u.combat.engagedByCavalry = false;
+
+      // Army A cavalry engages Army B ranged
+      const usedRangedB = new Set<string>();
+      for (const cav of cavA) {
+        for (const ranged of rangedBTargets) {
+          if (usedRangedB.has(ranged.combat.unit.id)) continue;
+          ranged.combat.engagedByCavalry = true;
+          usedRangedB.add(ranged.combat.unit.id);
+          break;
+        }
+      }
+      // Army B cavalry engages Army A ranged
+      const usedRangedA = new Set<string>();
+      for (const cav of cavB) {
+        for (const ranged of rangedATargets) {
+          if (usedRangedA.has(ranged.combat.unit.id)) continue;
+          ranged.combat.engagedByCavalry = true;
+          usedRangedA.add(ranged.combat.unit.id);
+          break;
+        }
+      }
+    }
+
     // === RANGED PHASE (BK 1 and 2 only) ===
     // Ground ranged units with ammo fire before melee engagement (excludes aerial ranged LL)
+    // Units engaged by cavalry cannot shoot — they are forced into melee.
     if (bk <= 2) {
-      const rangedA = armyA.filter(u => !isDefeated(u.combat) && isRangedUnit(u.combat) && !isAerialRanged(u.combat));
-      const rangedB = armyB.filter(u => !isDefeated(u.combat) && isRangedUnit(u.combat) && !isAerialRanged(u.combat));
+      const rangedA = armyA.filter(u => !isDefeated(u.combat) && isRangedUnit(u.combat) && !isAerialRanged(u.combat) && !u.combat.engagedByCavalry);
+      const rangedB = armyB.filter(u => !isDefeated(u.combat) && isRangedUnit(u.combat) && !isAerialRanged(u.combat) && !u.combat.engagedByCavalry);
       const aliveMeleeB = armyB.filter(u => !isDefeated(u.combat));
       const aliveMeleeA = armyA.filter(u => !isDefeated(u.combat));
 
@@ -411,10 +446,11 @@ function simulateSingleBattle(
     }
 
     // === MELEE PHASE ===
-    // Exclude: ranged in BK 1-2, aerial ranged (LL — always shoots), flyby units (TL — own phase)
+    // Engaged-by-cavalry ranged units join melee even in BK 1-2.
+    // Exclude: unengaged ranged in BK 1-2, aerial ranged (LL — always shoots), flyby units (TL — own phase)
     const meleeFilter = (u: CombatUnitWithSpells) =>
       !isDefeated(u.combat) &&
-      (bk > 2 || !isRangedUnit(u.combat)) &&
+      (bk > 2 || !isRangedUnit(u.combat) || u.combat.engagedByCavalry) &&
       !isAerialRanged(u.combat) &&
       !isFlybyUnit(u.combat);
     const matchups = createMatchups(

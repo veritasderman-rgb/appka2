@@ -116,7 +116,7 @@ function App() {
 
       {/* Footer */}
       <footer className="border-t border-dark-border px-4 py-2 text-center text-xs text-parchment-dark/50">
-        ADD Battlesystem Simulator · Monte Carlo simulace bojových střetů
+        ADD Battlesystem Simulator · Monte Carlo simulace bojových střetů · <span className="text-parchment-dark/30">v0.4.0</span>
       </footer>
     </div>
   );
